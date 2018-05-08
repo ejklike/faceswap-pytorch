@@ -1,0 +1,14 @@
+.DS_Store
+.vscode
+__pycache__
+.ipynb_checkpoints
+
+data
+output
+model
+trash
+
+*.pkl
+*.ipynb
+*.png
+*.jpg
