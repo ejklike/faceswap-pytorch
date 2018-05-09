@@ -66,6 +66,39 @@ class ToTensor(object):
 #     def __len__(self):
 #         return len(self.image_paths)
 
+# class FaceImages(Dataset):
+#     random_transform_args = {
+#         'rotation_range': 10,
+#         'zoom_range': 0.05,
+#         'shift_range': 0.05,
+#         'random_flip': 0.4,
+#     }
+#     random_warp_args = {
+#         'coverage': 160,
+#         'warp_scale': 3,
+#     }
+
+#     def __init__(self, data_dir, transform=None):
+#         self.image_paths = get_image_paths(data_dir)
+#         self.image_loader = ImageLoader(
+#             random_transform_args=self.random_transform_args, 
+#             random_warp_args=self.random_warp_args)
+#         self.transform = transform
+
+#         self.images = [self.image_loader.read_image(path) for path in self.image_paths]
+        
+#     def __getitem__(self, index):
+#         index = np.random.randint(0, len(self.images))
+#         image = self.images[index]
+#         distorted_img, target_img = self.image_loader.transform_image(image)
+#         if self.transform is not None:
+#             distorted_img, target_img = self.transform([distorted_img, target_img])
+#         return distorted_img, target_img
+
+#     def __len__(self):
+#         return len(self.image_paths)
+
+
 class FaceImages(Dataset):
     random_transform_args = {
         'rotation_range': 10,
@@ -80,19 +113,23 @@ class FaceImages(Dataset):
 
     def __init__(self, data_dir, transform=None):
         self.image_paths = get_image_paths(data_dir)
-        self.image_loader = ImageLoader(
+        image_loader = ImageLoader(
             random_transform_args=self.random_transform_args, 
             random_warp_args=self.random_warp_args)
-        self.transform = transform
 
-        self.images = [self.image_loader.read_image(path) for path in self.image_paths]
+        images = [image_loader.read_image(path) for path in self.image_paths]
+        self.distorted_imgs, self.target_imgs = [], []
+        for image in images:        
+            distorted_img, target_img = image_loader.transform_image(image)
+            if transform is not None:
+                distorted_img, target_img = transform([distorted_img, target_img])
+            self.distorted_imgs.append(distorted_img)
+            self.target_imgs.append(target_img)
         
     def __getitem__(self, index):
-        index = np.random.randint(0, len(self.images))
-        image = self.images[index]
-        distorted_img, target_img = self.image_loader.transform_image(image)
-        if self.transform is not None:
-            distorted_img, target_img = self.transform([distorted_img, target_img])
+        index = np.random.randint(0, len(self.image_paths))
+        distorted_img = self.distorted_imgs[index]
+        target_img = self.target_imgs[index]
         return distorted_img, target_img
 
     def __len__(self):
