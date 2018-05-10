@@ -1,5 +1,3 @@
-
-
 from scandir import scandir
 import numpy as np
 
@@ -35,69 +33,6 @@ class ToTensor(object):
         images = [_to_tensor(img) for img in images]
         return images
 
-# class FaceImages(Dataset):
-#     random_transform_args = {
-#         'rotation_range': 10,
-#         'zoom_range': 0.05,
-#         'shift_range': 0.05,
-#         'random_flip': 0.4,
-#     }
-#     random_warp_args = {
-#         'coverage': 160,
-#         'warp_scale': 5
-#     }
-
-#     def __init__(self, data_dir, transform=None):
-#         self.image_paths = get_image_paths(data_dir)
-#         self.image_loader = ImageLoader(
-#             random_transform_args=self.random_transform_args, 
-#             random_warp_args=self.random_warp_args)
-#         self.transform = transform
-        
-#     def __getitem__(self, index):
-#         path = self.image_paths[index]
-#         distorted_img, target_img = self.image_loader.read_image(path)
-
-#         if self.transform:
-#             distorted_img, target_img = self.transform([distorted_img, target_img])
-
-#         return distorted_img, target_img
-
-#     def __len__(self):
-#         return len(self.image_paths)
-
-# class FaceImages(Dataset):
-#     random_transform_args = {
-#         'rotation_range': 10,
-#         'zoom_range': 0.05,
-#         'shift_range': 0.05,
-#         'random_flip': 0.4,
-#     }
-#     random_warp_args = {
-#         'coverage': 160,
-#         'warp_scale': 3,
-#     }
-
-#     def __init__(self, data_dir, transform=None):
-#         self.image_paths = get_image_paths(data_dir)
-#         self.image_loader = ImageLoader(
-#             random_transform_args=self.random_transform_args, 
-#             random_warp_args=self.random_warp_args)
-#         self.transform = transform
-
-#         self.images = [self.image_loader.read_image(path) for path in self.image_paths]
-        
-#     def __getitem__(self, index):
-#         index = np.random.randint(0, len(self.images))
-#         image = self.images[index]
-#         distorted_img, target_img = self.image_loader.transform_image(image)
-#         if self.transform is not None:
-#             distorted_img, target_img = self.transform([distorted_img, target_img])
-#         return distorted_img, target_img
-
-#     def __len__(self):
-#         return len(self.image_paths)
-
 
 class FaceImages(Dataset):
     random_transform_args = {
@@ -108,7 +43,7 @@ class FaceImages(Dataset):
     }
     random_warp_args = {
         'coverage': 160,
-        'warp_scale': 3,
+        'warp_scale': 5,
     }
 
     def __init__(self, data_dir, transform=None):

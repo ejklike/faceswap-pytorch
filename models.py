@@ -18,19 +18,27 @@ from torch import load, save
 
 
 class BasicModule(nn.Module):
-    def __init__(self):
+    def __init__(self, path):
         super(BasicModule, self).__init__()
-        self.model_name = str(type(self))
+        self.path = path
 
-    def load(self, path):
-        self.load_state_dict(t.load(path))
+    def load(self):
+        if os.path.isfile(self.path):
+            ckpt = t.load(self.path)
+            self.load_state_dict(ckpt['state_dict'])
+            print("=> loaded checkpoint '{}'".format(self.path))
+            if ckpt['epoch'] is not None:
+                print('   (prev_epoch: {})'.format(ckpt['epoch']))
+        else:
+            print("=> no checkpoint found at '{}'".format(self.path))
 
-    def save(self, name=None):
-        if name is None:
-            prefix = './model/' + self.model_name + '_'
-            name = time.strftime(prefix + '%m%d_%H:%M:%S.pth')
-        t.save(self.state_dict(), name)
-        return name
+    def save(self, epoch=None):
+        ckpt = {
+            'state_dict': self.state_dict(),
+            'epoch': epoch
+        }
+        t.save(ckpt, self.path)
+        print("=> saved checkpoint '{}'".format(self.path))
 
 
 def upscale(in_channels, out_channels, kernel_size=3):
@@ -40,10 +48,10 @@ def upscale(in_channels, out_channels, kernel_size=3):
         nn.PixelShuffle(2))
 
 
-class FaceEncoder(nn.Module):
-    def __init__(self, init_dim=64, model_dir='./model/'):
-        super(FaceEncoder, self).__init__()
-        self.encoder_pkl_name = os.path.join(model_dir, 'encoder.pkl')
+class FaceEncoder(BasicModule):
+    def __init__(self, init_dim=32, path=None):
+        assert path is not None
+        super(FaceEncoder, self).__init__(path)
 
         self.init_dim = init_dim
 
@@ -80,31 +88,11 @@ class FaceEncoder(nn.Module):
         x = self.upscale(x) # (128, 8, 8)
         return x
 
-    def save_checkpoint(self, epoch):
-        encoder_state = {
-            'state_dict': self.state_dict(),
-        }
-        save(encoder_state, self.encoder_pkl_name)
-        print("=> saved checkpoint '{}'"
-              .format(self.encoder_pkl_name))
 
-    def load_checkpoint(self):
-        if os.path.isfile(self.encoder_pkl_name):
-            enc_checkpoint = load(self.encoder_pkl_name)
-
-            self.load_state_dict(enc_checkpoint['state_dict'])
-            print("=> loaded checkpoint '{}'"
-                  .format(self.encoder_pkl_name))
-        else:
-            print("=> no checkpoint found at '{}'"
-                  .format(self.encoder_pkl_name))
-
-
-
-class FaceDecoder(nn.Module):
-    def __init__(self, code_dim=128, model_dir='./model/'):
-        super(FaceDecoder, self).__init__()
-        self.decoder_pkl_name = os.path.join(model_dir, 'decoder.pkl')
+class FaceDecoder(BasicModule):
+    def __init__(self, code_dim=256, path=None):
+        assert path is not None
+        super(FaceDecoder, self).__init__(path)
 
         self.code_dim = code_dim
 
@@ -125,76 +113,3 @@ class FaceDecoder(nn.Module):
         x = self.conv(x)     # (3, 64, 64)
         x = F.sigmoid(x)
         return x
-
-    def save_checkpoint(self, epoch):
-        decoder_state = {
-            'epoch': epoch,
-            'state_dict': self.state_dict(),
-        }
-        save(decoder_state, self.decoder_pkl_name)
-        print("=> saved checkpoint '{}' (epoch {})"
-              .format(self.decoder_pkl_name, epoch))
-
-    def load_checkpoint(self):
-        if os.path.isfile(self.decoder_pkl_name):
-            dec_checkpoint = load(self.decoder_pkl_name)
-
-            start_epoch = dec_checkpoint['epoch']
-            self.load_state_dict(dec_checkpoint['state_dict'])
-            print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(self.decoder_pkl_name, start_epoch))
-        else:
-            print("=> no checkpoint found at '{}'"
-                  .format(self.decoder_pkl_name))
-
-
-class AutoEncoder(nn.Module):
-    def __init__(self, encoder, decoder):
-        super(AutoEncoder, self).__init__()
-        self.encoder = encoder
-        self.decoder = decoder
-
-    def forward(self, x):
-        return self.decoder(self.encoder(x))
-
-    # def save_checkpoint(self, epoch):
-    #     encoder_state = {
-    #         'state_dict': self.encoder.state_dict(),
-    #     }
-    #     decoder_state = {
-    #         'epoch': epoch,
-    #         'state_dict': self.decoder.state_dict(),
-    #     }
-    #     save(encoder_state, self.encoder_pkl_name)
-    #     save(decoder_state, self.decoder_pkl_name)
-    #     print("=> saved checkpoint '{}, {}' (epoch {})"
-    #           .format(self.encoder_pkl_name, self.decoder_pkl_name, epoch))
-
-    # def load_checkpoint(self):
-    #     if os.path.isfile(self.encoder_pkl_name) and os.path.isfile(self.decoder_pkl_name):
-    #         enc_checkpoint = load(self.encoder_pkl_name)
-    #         dec_checkpoint = load(self.decoder_pkl_name)
-
-    #         start_epoch = dec_checkpoint['epoch']
-    #         self.encoder.load_state_dict(enc_checkpoint['state_dict'])
-    #         self.decoder.load_state_dict(dec_checkpoint['state_dict'])
-    #         print("=> loaded checkpoint '{}, {}' (epoch {})"
-    #               .format(self.encoder_pkl_name, self.decoder_pkl_name, start_epoch))
-    #     else:
-    #         print("=> no checkpoint found at '{}, {}'"
-    #               .format(self.encoder_pkl_name, self.decoder_pkl_name))
-
-
-    # def save(self):
-    #     save(self.encoder, self.encoder_pkl_name)
-    #     save(self.decoder, self.decoder_pkl_name)
-    #     print("--------model saved--------\n")
-
-    # def load(self):
-    #     try:
-    #         self.encoder = load(self.encoder_pkl_name)
-    #         self.decoder = load(self.decoder_pkl_name)
-    #         print("\n--------model restored--------\n")
-    #     except:
-    #         print("\n--------model not restored--------\n")
-    #         pass
