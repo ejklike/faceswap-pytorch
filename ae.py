@@ -14,7 +14,7 @@ from lib.save_fig import save_fig
 parser = argparse.ArgumentParser(description='PyTorch FACESWAP Example')
 parser.add_argument('--face-id', dest='face_id', default='1',
                     help="face id (default: 1)")
-parser.add_argument('--init-dim', dest='init_dim', default=32,
+parser.add_argument('--init-dim', dest='init_dim', type=int, default=32,
                     help="the number of initial channel (default: 32)")
 parser.add_argument('--batch-size', type=int, default=16, metavar='N',
                     help='input batch size for training (default: 16)')
@@ -38,8 +38,8 @@ use_cuda = args.no_cuda is False and torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
 data_dir = mkdir('./data/{}'.format(args.face_id))
-model_dir = mkdir('./model/{}'.format(args.face_id))
-output_dir = mkdir('./output/{}'.format(args.face_id))
+model_dir = mkdir('./model/{}/init_64_conv_3'.format(args.face_id))
+output_dir = mkdir('./output/{}/init_64_conv3'.format(args.face_id))
 
 # Load data
 print('load data...', end='')
@@ -55,7 +55,8 @@ print('define model...', end='')
 encoder_path = os.path.join(model_dir, 'encoder.pth')
 decoder_path = os.path.join(model_dir, 'decoder.pth')
 encoder = FaceEncoder(init_dim=args.init_dim, path=encoder_path).to(device)
-decoder = FaceDecoder(code_dim=args.init_dim * 8, path=decoder_path).to(device)
+decoder = FaceDecoder(code_dim=args.init_dim * 4, path=decoder_path).to(device)
+# decoder = FaceDecoder(code_dim=args.init_dim * 8, path=decoder_path).to(device)
 print('---'*10)
 print(encoder)
 print('---'*10)

@@ -47,7 +47,6 @@ def upscale(in_channels, out_channels, kernel_size=3):
         nn.LeakyReLU(0.1),
         nn.PixelShuffle(2))
 
-
 class FaceEncoder(BasicModule):
     def __init__(self, init_dim=32, path=None):
         assert path is not None
@@ -61,6 +60,7 @@ class FaceEncoder(BasicModule):
         self.conv4 = self.conv(self.init_dim * 4, self.init_dim * 8)
 
         self.code_dim = self.init_dim * 8
+        # self.code_dim = self.init_dim * 4
 
         # use two linear layers to reduce #parameters
         self.linear1 = nn.Linear(self.code_dim*64*64, self.code_dim)
@@ -89,6 +89,33 @@ class FaceEncoder(BasicModule):
         return x
 
 
+class BasicResBlock(nn.Module):
+
+    def __init__(self, in_channels, out_channels, kernel_size=3):
+        super(BasicResBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, padding=1, bias=False)
+        # self.bn1 = nn.BatchNorm2d(planes)
+        self.relu = nn.LeakyReLU(0.2)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size, padding=1, bias=False)
+        # self.bn2 = nn.BatchNorm2d(planes)
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        # out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        # out = self.bn2(out)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+
+
+
 class FaceDecoder(BasicModule):
     def __init__(self, code_dim=256, path=None):
         assert path is not None
@@ -99,17 +126,20 @@ class FaceDecoder(BasicModule):
         self.upscale1 = upscale(self.code_dim//2, self.code_dim//4)
         self.upscale2 = upscale(self.code_dim//4, self.code_dim//8)
         self.upscale3 = upscale(self.code_dim//8, self.code_dim//16)
+
+        self.res_block1 = BasicResBlock(self.code_dim//16, self.code_dim//16, kernel_size=3)
+        self.res_block2 = BasicResBlock(self.code_dim//16, self.code_dim//16, kernel_size=3)
+
         # if stride == 1:
         #   padding = (k - 1) // 2
         self.conv = nn.Conv2d(self.code_dim//16, 3, kernel_size=5, padding=2)
-
-    def res_block(self, in_channels, out_channels):
-        pass
 
     def forward(self, x):    # (512, 8, 8)
         x = self.upscale1(x) # (256, 16, 16)
         x = self.upscale2(x) # (128, 32, 32)
         x = self.upscale3(x) # (64, 64, 64)
+        x = self.res_block1(x)
+        x = self.res_block2(x)
         x = self.conv(x)     # (3, 64, 64)
         x = F.sigmoid(x)
         return x
