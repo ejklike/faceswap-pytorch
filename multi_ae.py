@@ -51,7 +51,7 @@ device = torch.device("cuda" if use_cuda else "cpu")
 print('build encoder...', end='')
 model_dir = mkdir(args.model_dir)
 encoder_path = os.path.join(model_dir, 'encoder.pth')
-encoder = FaceEncoderIAE(
+encoder = FaceEncoder(
     init_dim=args.init_dim, code_dim=args.code_dim, path=encoder_path)
 encoder = encoder.to(device)
 encoder.load()
@@ -66,7 +66,7 @@ def get_dataloader(face_id):
         dataset, batch_size=args.batch_size, shuffle=True, **kwargs)
 
 def get_decoder(decoder_path):
-    decoder = FaceDecoderIAE(path=decoder_path)
+    decoder = FaceDecoder(path=decoder_path)
     decoder = decoder.to(device)
     decoder.load()
     return decoder
@@ -86,7 +86,8 @@ for face_id in face_ids:
         model_dir, 'optimizer{}.pth'.format(face_id))
 
 # Define loss function
-criterion = nn.L1Loss().to(device)
+# criterion = nn.L1Loss().to(device)
+criterion = GLoss().to(device)
 output_dir = mkdir(args.output_dir)
 
 def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=10):
@@ -119,15 +120,15 @@ for epoch in range(1, args.epochs + 1):
     for face_id in face_ids:
         decoder = get_decoder(decoder_path[face_id])
         parameters = list(encoder.parameters()) + list(decoder.parameters())
-        optimizer = get_optimizer(optimizer_path[face_id], parameters)
-        
-        train(epoch, face_id, data_loader[face_id], decoder, optimizer, 
+        optimizer = get_optimizer(args.lr, optimizer_path[face_id], parameters)
+
+        train(epoch, face_id, data_loader[face_id], decoder, optimizer,
             draw_img=is_save, loop=inner_loop)
-        
+
         print('')
         decoder.save(epoch)
         print('')
-        
+
         save_optimizer(optimizer_path[face_id], optimizer)
         del decoder, parameters, optimizer
 
