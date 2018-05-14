@@ -15,17 +15,20 @@ from lib.save_fig import save_fig
 parser = argparse.ArgumentParser(
     description='PyTorch FACESWAP Example')
 
-parser.add_argument('-i', '--input_dir', dest='input_dir', default='./data',
+parser.add_argument('-d', '--data-dir', dest='data_dir', default='./data',
                     help="input data directory")
-parser.add_argument('-o', '--output_dir', dest='output_dir', default='./output/multi',
+parser.add_argument('-o', '--output-dir', dest='output_dir', default='./output/multi',
                     help="output data directory")
-parser.add_argument('-m', '--model_dir', dest='model_dir', default='./model/multi',
+parser.add_argument('-m', '--model-dir', dest='model_dir', default='./model/multi',
                     help="model pth directory")
 
+parser.add_argument('-b', '--batch-size', dest='batch_size', type=int, default=64, metavar='N',
+                    help='input batch size for training (default: 64)')
 parser.add_argument('--init-dim', dest='init_dim', type=int, default=32,
                     help="the number of initial channel (default: 32)")
-parser.add_argument('--batch-size', type=int, default=64, metavar='N',
-                    help='input batch size for training (default: 64)')
+parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+                    help='how many batches to wait before logging training status')
+
 parser.add_argument('--epochs', type=int, default=100000000, metavar='N',
                     help='number of epochs to train (default: 100000000)')
 parser.add_argument('--lr', type=float, default=5e-5, metavar='LR',
@@ -34,8 +37,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                    help='how many batches to wait before logging training status')
+
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
@@ -53,7 +55,7 @@ encoder.load()
 print('finished!')
 
 def get_dataloader(face_id):
-    data_dir = os.path.join(args.input_dir, face_id)
+    data_dir = os.path.join(args.data_dir, face_id)
     transform = transforms.Compose([ToTensor()])
     dataset = FaceImages(data_dir, transform=transform)
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
@@ -82,7 +84,7 @@ data_loader = dict()
 decoder_path = dict()
 optimizer_path = dict()
 
-face_ids = get_face_ids(args.input_dir)
+face_ids = get_face_ids(args.data_dir)
 for face_id in face_ids:
     print('Face_id: {}'.format(face_id), end=', ')
     data_loader[face_id] = get_dataloader(face_id)
@@ -112,6 +114,7 @@ def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=1
                 print('\rTrain Epoch: {} (face_id: {}, loop: {}/{}) [{}/{} ({:.0f}%)], Loss: {:.6f}'.format(
                     epoch, face_id, loop_idx, loop, batch_idx * len(warped), len(dataloader.dataset),
                     100. * batch_idx / len(dataloader), loss.item()), end='')
+
     if draw_img:
         output_dir = mkdir(os.path.join(args.output_dir, face_id))
         save_fig(output_dir, epoch, warped, output, target, size=8)

@@ -47,20 +47,18 @@ def upscale(in_channels, out_channels, kernel_size=3):
         nn.LeakyReLU(0.1),
         nn.PixelShuffle(2))
 
+
 class FaceEncoder(BasicModule):
     def __init__(self, init_dim=32, path=None):
         assert path is not None
         super(FaceEncoder, self).__init__(path)
 
-        self.init_dim = init_dim
+        self.conv1 = self.conv(3, init_dim)
+        self.conv2 = self.conv(init_dim, init_dim * 2)
+        self.conv3 = self.conv(init_dim * 2, init_dim * 4)
+        self.conv4 = self.conv(init_dim * 4, init_dim * 8)
 
-        self.conv1 = self.conv(3, self.init_dim)        
-        self.conv2 = self.conv(self.init_dim, self.init_dim * 2)
-        self.conv3 = self.conv(self.init_dim * 2, self.init_dim * 4)
-        self.conv4 = self.conv(self.init_dim * 4, self.init_dim * 8)
-
-        self.code_dim = self.init_dim * 8
-        # self.code_dim = self.init_dim * 4
+        self.code_dim = init_dim * 8
 
         # use two linear layers to reduce #parameters
         self.linear1 = nn.Linear(self.code_dim*64*64, self.code_dim)
@@ -77,15 +75,15 @@ class FaceEncoder(BasicModule):
 
     def forward(self, x):
         b, c, w, h = x.shape
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
-        x = x.view(b, -1)
-        x = self.linear1(x)
-        x = self.linear2(x)
-        x = x.view(-1, self.code_dim, 4, 4)
-        x = self.upscale(x) # (128, 8, 8)
+        x = self.conv1(x) # (64, 64, 64)
+        x = self.conv2(x) # (128, 64, 64)
+        x = self.conv3(x) # (256, 64, 64)
+        x = self.conv4(x) # (512, 64, 64)
+        x = x.view(b, -1) # (512*64*64)
+        x = self.linear1(x) # (1024)
+        x = self.linear2(x) # (1024*4*4)
+        x = x.view(-1, self.code_dim, 4, 4) # (1024, 4, 4)
+        x = self.upscale(x) # (512, 8, 8)
         return x
 
 
@@ -121,25 +119,25 @@ class FaceDecoder(BasicModule):
         assert path is not None
         super(FaceDecoder, self).__init__(path)
 
-        self.code_dim = code_dim
+        input_dim = code_dim // 2
 
-        self.upscale1 = upscale(self.code_dim//2, self.code_dim//4)
-        self.upscale2 = upscale(self.code_dim//4, self.code_dim//8)
-        self.upscale3 = upscale(self.code_dim//8, self.code_dim//16)
+        self.upscale1 = upscale(input_dim, input_dim//2)
+        self.upscale2 = upscale(input_dim//2, input_dim//4)
+        self.upscale3 = upscale(input_dim//4, input_dim//8)
 
-        self.res_block1 = BasicResBlock(self.code_dim//16, self.code_dim//16, kernel_size=3)
-        self.res_block2 = BasicResBlock(self.code_dim//16, self.code_dim//16, kernel_size=3)
+        # self.res_block1 = BasicResBlock(self.code_dim//16, self.code_dim//16, kernel_size=3)
+        # self.res_block2 = BasicResBlock(self.code_dim//16, self.code_dim//16, kernel_size=3)
 
         # if stride == 1:
         #   padding = (k - 1) // 2
-        self.conv = nn.Conv2d(self.code_dim//16, 3, kernel_size=5, padding=2)
+        self.conv = nn.Conv2d(input_dim//8, 3, kernel_size=5, padding=2)
 
     def forward(self, x):    # (512, 8, 8)
         x = self.upscale1(x) # (256, 16, 16)
         x = self.upscale2(x) # (128, 32, 32)
         x = self.upscale3(x) # (64, 64, 64)
-        x = self.res_block1(x)
-        x = self.res_block2(x)
+        # x = self.res_block1(x)
+        # x = self.res_block2(x)
         x = self.conv(x)     # (3, 64, 64)
         x = F.sigmoid(x)
         return x
