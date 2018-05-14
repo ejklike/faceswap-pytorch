@@ -26,7 +26,9 @@ parser.add_argument('-b', '--batch-size', dest='batch_size', type=int, default=6
                     help='input batch size for training (default: 64)')
 parser.add_argument('--init-dim', dest='init_dim', type=int, default=32,
                     help="the number of initial channel (default: 32)")
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+parser.add_argument('--code-dim', dest='code_dim', type=int, default=512,
+                    help="the number of channel in encoded tensor (default: 512)")
+parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='how many batches to wait before logging training status')
 
 parser.add_argument('--epochs', type=int, default=100000000, metavar='N',
@@ -49,7 +51,8 @@ device = torch.device("cuda" if use_cuda else "cpu")
 print('build encoder...', end='')
 model_dir = mkdir(args.model_dir)
 encoder_path = os.path.join(model_dir, 'encoder.pth')
-encoder = FaceEncoder(init_dim=args.init_dim, path=encoder_path)
+encoder = FaceEncoderIAE(
+    init_dim=args.init_dim, code_dim=args.code_dim, path=encoder_path)
 encoder = encoder.to(device)
 encoder.load()
 print('finished!')
@@ -63,21 +66,10 @@ def get_dataloader(face_id):
         dataset, batch_size=args.batch_size, shuffle=True, **kwargs)
 
 def get_decoder(decoder_path):
-    decoder = FaceDecoder(
-        code_dim=args.init_dim * 8, path=decoder_path)
+    decoder = FaceDecoderIAE(path=decoder_path)
     decoder = decoder.to(device)
     decoder.load()
     return decoder
-
-def get_optimizer(optimizer_path, parameters):
-    optimizer = torch.optim.Adam(
-        parameters, lr=args.lr,  betas=(0.5, 0.999))
-    if os.path.isfile(optimizer_path):
-        optimizer.load_state_dict(torch.load(optimizer_path))
-    return optimizer
-
-def save_optimizer(optimizer_path, optimizer):
-    torch.save(optimizer.state_dict(), optimizer_path)
 
 print('make dataloaders, decoders, and optimizers...')
 data_loader = dict()
@@ -132,6 +124,7 @@ for epoch in range(1, args.epochs + 1):
         train(epoch, face_id, data_loader[face_id], decoder, optimizer, 
             draw_img=is_save, loop=inner_loop)
         
+        print('')
         decoder.save(epoch)
         print('')
         

@@ -12,3 +12,5 @@ trash
 *.ipynb
 *.png
 *.jpg
+
+*.xlsx
