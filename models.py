@@ -17,9 +17,9 @@ from torch import load, save
 # https://pytorch.org/docs/master/nn.html
 
 
-def get_optimizer(optimizer_path, parameters):
+def get_optimizer(lr, optimizer_path, parameters):
     optimizer = t.optim.Adam(
-        parameters, lr=args.lr,  betas=(0.5, 0.999))
+        parameters, lr=lr,  betas=(0.5, 0.999))
     if os.path.isfile(optimizer_path):
         optimizer.load_state_dict(t.load(optimizer_path))
     return optimizer
@@ -27,6 +27,30 @@ def get_optimizer(optimizer_path, parameters):
 
 def save_optimizer(optimizer_path, optimizer):
     t.save(optimizer.state_dict(), optimizer_path)
+
+
+
+class GLoss(nn.Module):
+    def forward(self, output, target):
+        # Content loss
+        l1_loss = nn.L1Loss()(output, target)
+        # Edge loss (similar with total variation loss)
+        edge_loss_w = t.mean(t.abs(self.first_order(output, axis=2) - self.first_order(target, axis=2)))
+        edge_loss_h = t.mean(t.abs(self.first_order(output, axis=3) - self.first_order(target, axis=3)))
+        return l1_loss + edge_loss_w + edge_loss_h
+
+    def first_order(self, x, axis=1):
+        _, _, w, h = x.shape
+        if axis == 2:
+            left = x[:, :, 0:w-1, :]
+            right = x[:, :, 1:w, :]
+            return t.abs(left - right)
+        elif axis == 3:
+            upper = x[:, :, :, 0:h-1]
+            lower = x[:, :, :, 1:h]
+            return t.abs(upper - lower)
+        else:
+            return None
 
 
 class BasicModule(nn.Module):
@@ -93,12 +117,12 @@ class FaceEncoder(BasicModule):
         self.conv1 = self.conv(3, init_dim)
         self.conv2 = self.conv(init_dim, init_dim * 2)
         self.conv3 = self.conv(init_dim * 2, init_dim * 4)
-        self.conv4 = self.conv(init_dim * 4, init_dim * 8)
+        # self.conv4 = self.conv(init_dim * 4, init_dim * 8)
 
         # use two linear layers to reduce #parameters
-        self.linear1 = nn.Linear(init_dim*8 * 64*64, code_dim)
+        self.linear1 = nn.Linear(init_dim*4 * 64*64, code_dim)
         self.linear2 = nn.Linear(code_dim, 1024 * 4*4)
-        
+
         self.upscale = upscale(1024, 512)
 
     def conv(self, in_channels, out_channels, kernel_size=5):
@@ -113,7 +137,7 @@ class FaceEncoder(BasicModule):
         x = self.conv1(x) # (128, 64, 64)
         x = self.conv2(x) # (256, 64, 64)
         x = self.conv3(x) # (512, 64, 64)
-        x = self.conv4(x) # (1024, 64, 64)
+        # x = self.conv4(x) # (1024, 64, 64)
         x = x.view(b, -1) # (1024*64*64)
         x = self.linear1(x) # (cdim)
         x = self.linear2(x) # (1024*4*4)
@@ -131,8 +155,8 @@ class FaceDecoder(BasicModule):
         self.upscale2 = upscale(256, 128)
         self.upscale3 = upscale(128, 64)
 
-        # self.res_block1 = BasicResBlock(64, 64, kernel_size=3)
-        # self.res_block2 = BasicResBlock(64, 64, kernel_size=3)
+        self.res_block1 = BasicResBlock(64, 64, kernel_size=3)
+        self.res_block2 = BasicResBlock(64, 64, kernel_size=3)
 
         # if stride == 1:
         #   padding = (k - 1) // 2
@@ -142,8 +166,8 @@ class FaceDecoder(BasicModule):
         x = self.upscale1(x) # (256, 16, 16)
         x = self.upscale2(x) # (128, 32, 32)
         x = self.upscale3(x) # (64, 64, 64)
-        # x = self.res_block1(x)
-        # x = self.res_block2(x)
+        x = self.res_block1(x)
+        x = self.res_block2(x)
         x = self.conv(x)     # (3, 64, 64)
         x = F.sigmoid(x)
         return x
@@ -165,7 +189,7 @@ class FaceDiscriminator(BasicModule):
         return nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size, stride=2, padding=34, bias=False),
             nn.LeakyReLU(0.2))
-    
+
     def forward(self, x):
         x = self.conv1(x)
         x = self.conv2(x)
@@ -173,69 +197,3 @@ class FaceDiscriminator(BasicModule):
         x = self.convout(x)
         x = F.sigmoid(x)
         return x
-
-
-
-# class FaceEncoderIAE(BasicModule):
-#     def __init__(self, init_dim=128, code_dim=1024, path=None):
-#         assert path is not None
-#         super(FaceEncoderIAE, self).__init__(path)
-
-#         self.conv1 = self.conv(3, init_dim)
-#         self.conv2 = self.conv(init_dim, init_dim * 2)
-#         self.conv3 = self.conv(init_dim * 2, init_dim * 4)
-#         # self.conv4 = self.conv(init_dim * 4, init_dim * 8)
-
-#         # use two linear layers to reduce #parameters
-#         self.linear1 = nn.Linear(init_dim*4 * 64*64, code_dim)
-#         self.linear2 = nn.Linear(code_dim, 512 * 4*4)
-
-#     def conv(self, in_channels, out_channels, kernel_size=5):
-#         # if stride == 2:
-#         #   padding = size - 1 - (size - k) // 2
-#         return nn.Sequential(
-#             nn.Conv2d(in_channels, out_channels, kernel_size, stride=2, padding=34),
-#             nn.LeakyReLU(0.1))
-
-#     def forward(self, x):
-#         b, c, w, h = x.shape
-#         x = self.conv1(x) # (128, 64, 64)
-#         x = self.conv2(x) # (256, 64, 64)
-#         x = self.conv3(x) # (512, 64, 64)
-#         # x = self.conv4(x) # (1024, 64, 64)
-#         x = x.view(b, -1) # (1024*64*64)
-#         x = self.linear1(x) # (cdim)
-#         x = self.linear2(x) # (1024*4*4)
-#         x = x.view(-1, 512, 4, 4) # (1024, 4, 4)
-#         return x
-
-
-# class FaceDecoderIAE(BasicModule):
-#     def __init__(self, path=None):
-#         assert path is not None
-#         super(FaceDecoderIAE, self).__init__(path)
-
-#         self.upscale1 = upscale(512, 256)
-#         self.upscale2 = upscale(256, 128)
-#         self.upscale3 = upscale(128, 64)
-#         self.upscale4 = upscale(64, 32)
-
-#         c_last = 32
-
-#         self.res_block1 = BasicResBlock(c_last, c_last, kernel_size=3)
-#         self.res_block2 = BasicResBlock(c_last, c_last, kernel_size=3)
-
-#         # if stride == 1:
-#         #   padding = (k - 1) // 2
-#         self.conv = nn.Conv2d(c_last, 3, kernel_size=5, padding=2)
-
-#     def forward(self, x):    # (512, 4, 4)
-#         x = self.upscale1(x) # (256, 8, 8)
-#         x = self.upscale2(x) # (128, 16, 16)
-#         x = self.upscale3(x) # (64, 32, 32)
-#         x = self.upscale4(x) # (32, 64, 64)
-#         x = self.res_block1(x)
-#         x = self.res_block2(x)
-#         x = self.conv(x)     # (3, 64, 64)
-#         x = F.sigmoid(x)
-#         return x
