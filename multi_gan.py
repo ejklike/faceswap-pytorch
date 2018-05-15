@@ -108,9 +108,11 @@ def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=1
         for batch_idx, (warped, target) in enumerate(dataloader):
             # forward
             warped, target = warped.to(device), target.to(device)
-            output = decoder(encoder(warped))
-            gen_loss = criterionG(output, target)
+            rgb, mask = decoder(encoder(warped))
+            output = rgb * mask + warped * (1-mask)
             dreal, dfake = discriminator(target), discriminator(output)
+            # loss
+            gen_loss = criterionG(target, output, rgb)
             disc_loss = criterionD(dreal, dfake)
             loss = gen_loss + disc_loss
             # backward
@@ -124,7 +126,7 @@ def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=1
 
     if draw_img:
         output_dir = mkdir(os.path.join(args.output_dir, face_id))
-        save_fig(output_dir, epoch, warped, output, target, size=8)
+        save_fig(output_dir, epoch, warped, output, mask, target, size=8)
 
 print('\nstart training...\n')
 for epoch in range(1, args.epochs + 1):

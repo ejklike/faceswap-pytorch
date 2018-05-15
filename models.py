@@ -30,14 +30,14 @@ def save_optimizer(optimizer_path, optimizer):
 
 
 class GLoss(nn.Module):
-    def forward(self, output, target):
+    def forward(self, target, output, rgb):
         # Content loss
-        l1_loss = nn.L1Loss()(output, target)
+        l1_loss = nn.L1Loss()(rgb, target)
         # LS loss
         ls_loss = nn.MSELoss()(output, target)
         # Edge loss (similar with total variation loss)
-        edge_loss_w = t.mean(t.abs(self.first_order(output, axis=2) - self.first_order(target, axis=2)))
-        edge_loss_h = t.mean(t.abs(self.first_order(output, axis=3) - self.first_order(target, axis=3)))
+        edge_loss_w = t.mean(t.abs(self.first_order(rgb, axis=2) - self.first_order(target, axis=2)))
+        edge_loss_h = t.mean(t.abs(self.first_order(rgb, axis=3) - self.first_order(target, axis=3)))
         return l1_loss + ls_loss + edge_loss_w + edge_loss_h
 
     def first_order(self, x, axis=1):
@@ -173,7 +173,7 @@ class FaceDecoder(BasicModule):
 
         # if stride == 1:
         #   padding = (k - 1) // 2
-        self.conv = nn.Conv2d(64, 3, kernel_size=5, padding=2)
+        self.conv = nn.Conv2d(64, 4, kernel_size=5, padding=2)
 
     def forward(self, x):    # (512, 8, 8)
         x = self.upscale1(x) # (256, 16, 16)
@@ -183,7 +183,9 @@ class FaceDecoder(BasicModule):
         x = self.res_block2(x)
         x = self.conv(x)     # (3, 64, 64)
         x = F.sigmoid(x)
-        return x
+        rgb, mask = x[:, :3, :, :], x[:, 3:, :, :]
+        mask = t.cat([mask, mask, mask], dim=1)
+        return rgb, mask
 
 
 class FaceDiscriminator(BasicModule):
