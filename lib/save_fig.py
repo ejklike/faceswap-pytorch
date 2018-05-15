@@ -3,14 +3,13 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
-def save_fig(output_dir, epoch, input_data, output_data, target_data, size=8):
+def save_fig(output_dir, epoch, img_list, size=8):
     # initialize figure
     scale = 20
-    fig, axis = plt.subplots(3, size, figsize=(5 * scale, 2 * scale))
+    img_count = len(img_list) # num_column
+    fig, axis = plt.subplots(img_count, size, figsize=(5 * scale, 2 * scale))
 
-    input_data = input_data.data.cpu().numpy()
-    output_data = output_data.data.cpu().numpy()
-    target_data = target_data.data.cpu().numpy()
+    img_list = [img_batch.data.cpu().numpy() for img_batch in img_list]
 
     def change_axis_and_colorspace(img):
         img = np.reshape(img, (3, 64, 64)).transpose((1, 2, 0))
@@ -18,20 +17,10 @@ def save_fig(output_dir, epoch, input_data, output_data, target_data, size=8):
         return img
 
     for i in range(size):
-        axis[0][i].imshow(change_axis_and_colorspace(input_data[i]))
-        axis[0][i].set_xticks(()); axis[0][i].set_yticks(())
-
-        axis[1][i].clear()
-        axis[1][i].imshow(change_axis_and_colorspace(output_data[i]))
-        axis[1][i].set_xticks(()); axis[1][i].set_yticks(())
-
-        axis[2][i].clear()
-        axis[2][i].imshow(change_axis_and_colorspace(target_data[i]))
-        axis[2][i].set_xticks(()); axis[1][i].set_yticks(())
-    
-    axis[0][0].set_ylabel('input_data')
-    axis[1][0].set_ylabel('output_data')
-    axis[2][0].set_ylabel('target_data')
+        for j, img_data in enumerate(img_list):
+            axis[j][i].clear()
+            axis[j][i].imshow(change_axis_and_colorspace(img_data[i]))
+            axis[j][i].set_xticks(()); axis[j][i].set_yticks(())
 
     fig.tight_layout()
     plt.savefig('{}/epoch_{:00000}.png'.format(output_dir, epoch))

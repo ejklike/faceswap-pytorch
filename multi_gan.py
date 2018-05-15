@@ -69,12 +69,12 @@ discriminator = get_model('discriminator', FaceDiscriminator, device='cuda', **d
 
 # FACE IDs for training
 face_ids = get_face_ids(args.data_dir)
+print('Face_id: {} (total: {})'.format(', '.join(face_ids), len(face_ids)))
 
 # DATALOADERS for each face_id
 print('make dataloaders...')
 data_loader = dict()
 kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-print('Face_id: ', end='')
 for face_id in face_ids:
     print('{}'.format(face_id), end=', ')
     dataset = FaceImages(
@@ -82,7 +82,7 @@ for face_id in face_ids:
         transform=transforms.Compose([ToTensor()]))
     data_loader[face_id] = torch.utils.data.DataLoader(
         dataset, batch_size=args.batch_size, shuffle=True, **kwargs)
-print('')
+print('done!')
     
 # path dicts to load/save model/optimizer while training
 decoder_path = dict()
@@ -94,9 +94,9 @@ for face_id in face_ids:
         model_dir, 'optimizer{}.pth'.format(face_id))
 
 # LOSSES
-criterionG = GLoss().to(device)
+criterion_basic = BasicLoss().to(device)
 ## 
-criterionD = DLoss().to(device)
+criterion_gan = LSGANLoss().to(device)
 
 def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=10):
     encoder.train()
@@ -108,16 +108,19 @@ def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=1
             # forward
             warped, target = warped.to(device), target.to(device)
             output = decoder(encoder(warped))
-            dreal, dfake = discriminator(target), discriminator(output)
+
             # loss
-            gen_loss = criterionG(output, target)
-            disc_loss = criterionD(dreal, dfake)
-            loss = gen_loss + disc_loss
+            loss = criterion_basic(output, target)
+
+            ##
+            dreal, dfake = discriminator(target), discriminator(output)
+            loss += criterion_gan(output, dreal, dfake, device=device)
 
             # backward
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
             if batch_idx % args.log_interval == 0:
                 print('\rTrain Epoch: {} (face_id: {}, loop: {}/{}) [{}/{} ({:.0f}%)], Loss: {:.6f}'.format(
                     epoch, face_id, loop_idx, loop, batch_idx * len(warped), len(dataloader.dataset),
@@ -125,7 +128,8 @@ def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=1
 
     if draw_img:
         output_dir = mkdir(os.path.join(args.output_dir, face_id))
-        save_fig(output_dir, epoch * loop, warped, output, target, size=8)
+        img_list = [warped, output, target]
+        save_fig(output_dir, epoch * loop, img_list, size=8)
 
 print('\nstart training...\n')
 for epoch in range(1, args.epochs + 1):
@@ -154,3 +158,5 @@ for epoch in range(1, args.epochs + 1):
 
     print('')
     encoder.save(epoch * inner_loop)
+    ##
+    discriminator.save(epoch * inner_loop)
