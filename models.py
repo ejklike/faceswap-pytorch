@@ -16,6 +16,13 @@ from torch import load, save
 # https://github.com/ShayanPersonal/stacked-autoencoder-pytorch/blob/master/model.py
 # https://pytorch.org/docs/master/nn.html
 
+def get_model(model_name, model_class, device='cuda', **kwargs):
+    print('build {}...'.format(model_name))
+    model = model_class(**kwargs).to(device)
+    model.load()
+    print('build OK!\n')
+    return model
+
 
 def get_optimizer(lr, optimizer_path, parameters):
     optimizer = t.optim.Adam(
@@ -29,16 +36,14 @@ def save_optimizer(optimizer_path, optimizer):
     t.save(optimizer.state_dict(), optimizer_path)
 
 
-class GLoss(nn.Module):
-    def forward(self, target, output, rgb):
-        # Content loss
-        l1_loss = nn.L1Loss()(rgb, target)
-        # LS loss
-        ls_loss = nn.MSELoss()(output, target)
+class BasicLoss(nn.Module):
+    def forward(self, output, target):
+        # MAE loss
+        l1_loss = nn.L1Loss()(output, target)
         # Edge loss (similar with total variation loss)
-        edge_loss_w = t.mean(t.abs(self.first_order(rgb, axis=2) - self.first_order(target, axis=2)))
-        edge_loss_h = t.mean(t.abs(self.first_order(rgb, axis=3) - self.first_order(target, axis=3)))
-        return l1_loss + ls_loss + edge_loss_w + edge_loss_h
+        edge_loss_w = t.mean(t.abs(self.first_order(output, axis=2) - self.first_order(target, axis=2)))
+        edge_loss_h = t.mean(t.abs(self.first_order(output, axis=3) - self.first_order(target, axis=3)))
+        return l1_loss + edge_loss_w + edge_loss_h
 
     def first_order(self, x, axis=1):
         _, _, w, h = x.shape
@@ -54,16 +59,18 @@ class GLoss(nn.Module):
             return None
 
 
-class DLoss(nn.Module):
-    def forward(self, real, fake):
+class LSGANLoss(nn.Module):
+    def forward(self, output, dreal, dfake, device='cuda'):
         """
         fake/real are outputs from discriminators
         """
+        # LS loss
+        loss_G = nn.MSELoss()(output, t.ones(output.shape).to(device))
         # MSE for real
-        real_loss = nn.MSELoss()(real, t.ones(real.shape).cuda())
+        loss_real = nn.MSELoss()(dreal, t.ones(dreal.shape).to(device))
         # MSE for fake
-        fake_loss = nn.MSELoss()(fake, t.zeros(fake.shape).cuda())
-        return real_loss + fake_loss
+        loss_fake = nn.MSELoss()(dfake, t.zeros(dfake.shape).to(device))
+        return loss_G + loss_real + loss_fake
 
 
 class BasicModule(nn.Module):
