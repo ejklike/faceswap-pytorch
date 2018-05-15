@@ -45,74 +45,75 @@ args = parser.parse_args()
 # Torch Seed
 torch.manual_seed(args.seed)
 
-# CUDA setting
+# CUDA/CUDNN setting
 torch.backends.cudnn.benchmark = True
 use_cuda = args.no_cuda is False and torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
-# MODEL DIR
+# MODEL/OUTPUT DIR
 model_dir = mkdir(args.model_dir)
+output_dir = mkdir(args.output_dir)
 
-print('build encoder...', end='')
-encoder_path = os.path.join(model_dir, 'encoder.pth')
-encoder = FaceEncoder(
-    init_dim=args.init_dim, code_dim=args.code_dim, path=encoder_path)
-encoder = encoder.to(device)
-encoder.load()
-print('finished!')
+# ENCODER
+encoder_args = dict(
+    path=os.path.join(model_dir, 'encoder.pth'),
+    init_dim=args.init_dim,
+    code_dim=args.code_dim)
+encoder = get_model('encoder', FaceEncoder, device='cuda', **encoder_args)
 
-print('build discriminator...', end='')
-discriminator_path = os.path.join(model_dir, 'discriminator.pth')
-discriminator = FaceDiscriminator(path=discriminator_path)
-discriminator = discriminator.to(device)
-discriminator.load()
-print('finished!')
+## 
+# DISCRIMINATOR
+disc_args = dict(
+    path=os.path.join(model_dir, 'discriminator.pth'))
+discriminator = get_model('discriminator', FaceDiscriminator, device='cuda', **disc_args)
 
-def get_dataloader(face_id):
-    data_dir = os.path.join(args.data_dir, face_id)
-    transform = transforms.Compose([ToTensor()])
-    dataset = FaceImages(data_dir, transform=transform)
-    kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    return torch.utils.data.DataLoader(
-        dataset, batch_size=args.batch_size, shuffle=True, **kwargs)
+# FACE IDs for training
+face_ids = get_face_ids(args.data_dir)
 
-def get_decoder(decoder_path):
-    decoder = FaceDecoder(path=decoder_path)
-    decoder = decoder.to(device)
-    decoder.load()
-    return decoder
-
-print('make dataloaders, decoders, and optimizers...')
+# DATALOADERS for each face_id
+print('make dataloaders...')
 data_loader = dict()
+kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
+print('Face_id: ', end='')
+for face_id in face_ids:
+    print('{}'.format(face_id), end=', ')
+    dataset = FaceImages(
+        data_dir=os.path.join(args.data_dir, face_id), 
+        transform=transforms.Compose([ToTensor()]))
+    data_loader[face_id] = torch.utils.data.DataLoader(
+        dataset, batch_size=args.batch_size, shuffle=True, **kwargs)
+print('')
+    
+# path dicts to load/save model/optimizer while training
 decoder_path = dict()
 optimizer_path = dict()
-
-face_ids = get_face_ids(args.data_dir)
 for face_id in face_ids:
-    print('Face_id: {}'.format(face_id), end=', ')
-    data_loader[face_id] = get_dataloader(face_id)
     decoder_path[face_id] = os.path.join(
         model_dir, 'decoder{}.pth'.format(face_id))
     optimizer_path[face_id] = os.path.join(
         model_dir, 'optimizer{}.pth'.format(face_id))
 
-# Define loss function
+# LOSSES
 criterionG = GLoss().to(device)
+## 
 criterionD = DLoss().to(device)
-output_dir = mkdir(args.output_dir)
 
 def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=10):
     encoder.train()
     decoder.train()
+    ##
+    discriminator.train()
     for loop_idx in range(1, loop + 1):
         for batch_idx, (warped, target) in enumerate(dataloader):
             # forward
             warped, target = warped.to(device), target.to(device)
             output = decoder(encoder(warped))
-            gen_loss = criterionG(output, target)
             dreal, dfake = discriminator(target), discriminator(output)
+            # loss
+            gen_loss = criterionG(output, target)
             disc_loss = criterionD(dreal, dfake)
             loss = gen_loss + disc_loss
+
             # backward
             optimizer.zero_grad()
             loss.backward()
@@ -124,7 +125,7 @@ def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=1
 
     if draw_img:
         output_dir = mkdir(os.path.join(args.output_dir, face_id))
-        save_fig(output_dir, epoch, warped, output, target, size=8)
+        save_fig(output_dir, epoch * loop, warped, output, target, size=8)
 
 print('\nstart training...\n')
 for epoch in range(1, args.epochs + 1):
@@ -132,19 +133,24 @@ for epoch in range(1, args.epochs + 1):
     is_save = epoch % args.log_interval == 0
     shuffle(face_ids)
     for face_id in face_ids:
-        decoder = get_decoder(decoder_path[face_id])
+        decoder_args = dict(path=decoder_path[face_id])
+        decoder = get_model('decoder_' + face_id, FaceDecoder, device='cuda', **decoder_args)
+        
         parameters = list(encoder.parameters()) + list(decoder.parameters())
+        ##
+        parameters += list(discriminator.parameters())
+        
         optimizer = get_optimizer(args.lr, optimizer_path[face_id], parameters)
         
         train(epoch, face_id, data_loader[face_id], decoder, optimizer, 
             draw_img=is_save, loop=inner_loop)
         
         print('')
-        decoder.save(epoch)
+        decoder.save(epoch * inner_loop)
         print('')
         
         save_optimizer(optimizer_path[face_id], optimizer)
         del decoder, parameters, optimizer
 
     print('')
-    encoder.save(epoch)
+    encoder.save(epoch * inner_loop)

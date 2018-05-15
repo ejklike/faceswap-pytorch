@@ -16,6 +16,13 @@ from torch import load, save
 # https://github.com/ShayanPersonal/stacked-autoencoder-pytorch/blob/master/model.py
 # https://pytorch.org/docs/master/nn.html
 
+def get_model(model_name, model_class, device='cuda', **kwargs):
+    print('build {}...'.format(model_name))
+    model = model_class(**kwargs).to(device)
+    model.load()
+    print('build OK!\n')
+    return model
+
 
 def get_optimizer(lr, optimizer_path, parameters):
     optimizer = t.optim.Adam(
