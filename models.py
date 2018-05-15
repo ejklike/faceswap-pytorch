@@ -180,7 +180,7 @@ class FaceDecoder(BasicModule):
 
         # if stride == 1:
         #   padding = (k - 1) // 2
-        self.conv = nn.Conv2d(64, 4, kernel_size=5, padding=2)
+        self.conv = nn.Conv2d(64, 3, kernel_size=5, padding=2)
 
     def forward(self, x):    # (512, 8, 8)
         x = self.upscale1(x) # (256, 16, 16)
@@ -190,9 +190,7 @@ class FaceDecoder(BasicModule):
         x = self.res_block2(x)
         x = self.conv(x)     # (3, 64, 64)
         x = F.sigmoid(x)
-        rgb, mask = x[:, :3, :, :], x[:, 3:, :, :]
-        mask = t.cat([mask, mask, mask], dim=1)
-        return rgb, mask
+        return x
 
 
 class FaceDiscriminator(BasicModule):

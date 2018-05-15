@@ -107,7 +107,6 @@ def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=1
         for batch_idx, (warped, target) in enumerate(dataloader):
             # forward
             warped, target = warped.to(device), target.to(device)
-
             output = decoder(encoder(warped))
 
             # loss
