@@ -131,6 +131,24 @@ def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=1
         img_list = [warped, output, target]
         save_fig(output_dir, epoch * loop, img_list, size=8)
 
+
+def test(epoch, face_id, dataloader, decoder, draw_img=False):
+    encoder.eval()
+    decoder.eval()
+    ##
+    discriminator.eval()
+    for batch_idx, (warped, target) in enumerate(dataloader):
+        # forward
+        warped, target = warped.to(device), target.to(device)
+        output = decoder(encoder(warped))
+
+        if draw_img:
+            output_dir = mkdir(os.path.join(args.output_dir, 'test'))
+            output_dir = mkdir(os.path.join(output_dir, face_id))
+            img_list = [warped, output, target]
+            save_fig(output_dir, epoch, img_list, size=8)
+
+
 print('\nstart training...\n')
 for epoch in range(1, args.epochs + 1):
     inner_loop = 100
@@ -148,6 +166,9 @@ for epoch in range(1, args.epochs + 1):
         
         train(epoch, face_id, data_loader[face_id], decoder, optimizer, 
             draw_img=is_save, loop=inner_loop)
+
+        test(epoch, face_id, data_loader[face_id], decoder, draw_img=is_save)
+
         
         print('')
         decoder.save(epoch * inner_loop)
