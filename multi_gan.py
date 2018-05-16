@@ -109,9 +109,9 @@ def train(epoch, face_id, dataloader, decoder, optimizer, draw_img=False, loop=1
             # forward
             warped, target = warped.to(device), target.to(device)
             rgb, mask = decoder(encoder(warped))
-            loss = criterion_basic(rgb, target)
-            
             output = rgb * mask + warped * (1-mask)
+            
+            loss = criterion_basic(rgb, target)
             dreal, dfake = discriminator(target), discriminator(output)
             loss += criterion_gan(output, dreal, dfake, device=device)
 

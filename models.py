@@ -192,7 +192,6 @@ class FaceDecoder(BasicModule):
         x = self.conv(x)     # (3, 64, 64)
         x = F.sigmoid(x)
         rgb, mask = x[:, :3, :, :], x[:, 3:, :, :]
-        mask = t.cat([mask, mask, mask], dim=1)
         return rgb, mask
 
 
