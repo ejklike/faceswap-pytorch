@@ -13,9 +13,11 @@ matplotlib==2.2.2
 ## usage statement
 
 ```
-usage: multi_ae.py [-h] [-d DATA_DIR] [-o OUTPUT_DIR] [-m MODEL_DIR] [-b N]
-                   [--init-dim INIT_DIM] [--log-interval N] [--epochs N]
-                   [--lr LR] [--no-cuda] [--seed S]
+usage: multi_ae.py [-h] [-d DATA_DIR] [-o OUTPUT_DIR] [-m MODEL_DIR]
+                   [-b BATCH_SIZE] [--init-dim INIT_DIM] [--code-dim CODE_DIM]
+                   [--log-interval LOG_INTERVAL] [--epochs EPOCHS]
+                   [--inner_loop INNER_LOOP] [--lr LR] [--no-cuda]
+                   [--seed SEED] [--fix-enc]
 
 PyTorch FACESWAP Example
 
@@ -27,14 +29,21 @@ optional arguments:
                         output data directory
   -m MODEL_DIR, --model-dir MODEL_DIR
                         model pth directory
-  -b N, --batch-size N  input batch size for training (default: 64)
+  -b BATCH_SIZE, --batch-size BATCH_SIZE
+                        input batch size for training (default: 64)
   --init-dim INIT_DIM   the number of initial channel (default: 32)
-  --log-interval N      how many batches to wait before logging training
+  --code-dim CODE_DIM   the number of channel in encoded tensor (default: 512)
+  --log-interval LOG_INTERVAL
+                        how many batches to wait before logging training
                         status
-  --epochs N            number of epochs to train (default: 100000000)
+  --epochs EPOCHS       number of epochs to train (default: 100000000)
+  --inner_loop INNER_LOOP
+                        number of loop in an epoch for each face (default:
+                        100)
   --lr LR               learning rate (default: 5e-5)
   --no-cuda             disables CUDA training
-  --seed S              random seed (default: 1)
+  --seed SEED           random seed (default: 1)
+  --fix-enc             fix encoder and train decoder only
 ```
 
 ## How to
