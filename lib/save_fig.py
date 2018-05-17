@@ -1,38 +1,35 @@
+import cv2
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
 
-def save_fig(output_dir, epoch, input_data, output_data, target_data, size=8):
-    # initialize figure
-    scale = 20
-    fig, axis = plt.subplots(3, size, figsize=(5 * scale, 2 * scale))
 
-    input_data = input_data.data.cpu().numpy()
-    output_data = output_data.data.cpu().numpy()
-    target_data = target_data.data.cpu().numpy()
+def imwrite(img_list, fname, size=8):    
+    def _torch_to_img(tensor):
+        return tensor.data.cpu().numpy().transpose((0,2,3,1))
 
-    def change_axis_and_colorspace(img):
-        img = np.reshape(img, (3, 64, 64)).transpose((1, 2, 0))
-        img = img[:, :, ::-1] # channel permutation
-        return img
-
-    for i in range(size):
-        axis[0][i].imshow(change_axis_and_colorspace(input_data[i]))
-        axis[0][i].set_xticks(()); axis[0][i].set_yticks(())
-
-        axis[1][i].clear()
-        axis[1][i].imshow(change_axis_and_colorspace(output_data[i]))
-        axis[1][i].set_xticks(()); axis[1][i].set_yticks(())
-
-        axis[2][i].clear()
-        axis[2][i].imshow(change_axis_and_colorspace(target_data[i]))
-        axis[2][i].set_xticks(()); axis[1][i].set_yticks(())
+    img_list = [_torch_to_img(img_batch)[:size] for img_batch in img_list]
+    figure = np.stack(img_list, axis=0)
+    # print(figure.shape)
     
-    axis[0][0].set_ylabel('input_data')
-    axis[1][0].set_ylabel('output_data')
-    axis[2][0].set_ylabel('target_data')
+    # figure = figure.reshape((len(img_list), ) + figure.shape[1:])
+    figure = stack_images(figure)
+    figure = np.clip(figure * 255, 0, 255).astype('uint8')
+    cv2.imwrite(fname, figure)
 
-    fig.tight_layout()
-    plt.savefig('{}/epoch_{:00000}.png'.format(output_dir, epoch))
-    plt.close()
+
+def stack_images(images):
+    def get_transpose_axes(n):
+        if n % 2 == 0:
+            y_axes = list(range(1, n - 1, 2))
+            x_axes = list(range(0, n - 1, 2))
+        else:
+            y_axes = list(range(0, n - 1, 2))
+            x_axes = list(range(1, n - 1, 2))
+        return y_axes, x_axes, [n - 1]
+
+    images_shape = np.array(images.shape)
+    new_axes = get_transpose_axes(len(images_shape))
+    new_shape = [np.prod(images_shape[x]) for x in new_axes]
+    return np.transpose(
+        images,
+        axes=np.concatenate(new_axes)
+        ).reshape(new_shape)

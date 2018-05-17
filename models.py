@@ -17,6 +17,14 @@ from torch import load, save
 # https://pytorch.org/docs/master/nn.html
 
 
+
+def get_model(model_name, model_class, device='cuda', **kwargs):
+    print('build {}...'.format(model_name))
+    model = model_class(**kwargs).to(device)
+    model.load()
+    return model
+
+
 def get_optimizer(lr, optimizer_path, parameters):
     optimizer = t.optim.Adam(
         parameters, lr=lr,  betas=(0.5, 0.999))
@@ -29,15 +37,17 @@ def save_optimizer(optimizer_path, optimizer):
     t.save(optimizer.state_dict(), optimizer_path)
 
 
-
-class GLoss(nn.Module):
+class BasicLoss(nn.Module):
     def forward(self, output, target):
-        # Content loss
+        # MAE loss
         l1_loss = nn.L1Loss()(output, target)
-        # Edge loss (similar with total variation loss)
-        edge_loss_w = t.mean(t.abs(self.first_order(output, axis=2) - self.first_order(target, axis=2)))
-        edge_loss_h = t.mean(t.abs(self.first_order(output, axis=3) - self.first_order(target, axis=3)))
-        return l1_loss + edge_loss_w + edge_loss_h
+        return l1_loss
+        # # Edge loss (similar with total variation loss)
+        # edge_loss_w = t.mean(t.abs(
+        #     self.first_order(output, axis=2) - self.first_order(target, axis=2)))
+        # edge_loss_h = t.mean(t.abs(
+        #     self.first_order(output, axis=3) - self.first_order(target, axis=3)))
+        # return l1_loss + edge_loss_w + edge_loss_h
 
     def first_order(self, x, axis=1):
         _, _, w, h = x.shape
@@ -88,20 +98,20 @@ class BasicResBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3):
         super(BasicResBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_channels)
+        # self.bn1 = nn.BatchNorm2d(out_channels)
         self.relu = nn.LeakyReLU(0.2)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(out_channels)
+        # self.bn2 = nn.BatchNorm2d(out_channels)
 
     def forward(self, x):
         residual = x
 
         out = self.conv1(x)
-        out = self.bn1(out)
+        # out = self.bn1(out)
         out = self.relu(out)
 
         out = self.conv2(out)
-        out = self.bn2(out)
+        # out = self.bn2(out)
 
         out += residual
         out = self.relu(out)
@@ -169,31 +179,5 @@ class FaceDecoder(BasicModule):
         x = self.res_block1(x)
         x = self.res_block2(x)
         x = self.conv(x)     # (3, 64, 64)
-        x = F.sigmoid(x)
-        return x
-
-
-class FaceDiscriminator(BasicModule):
-    def __init__(self, path=None):
-        assert path is not None
-        super(FaceDiscriminator, self).__init__(path)
-
-        self.conv1 = self.conv(64, 64)
-        self.conv2 = self.conv(64, 128)
-        self.conv3 = self.conv(128, 256)
-        self.convout = Conv2d(256, 1, 4, bias=False)
-
-    def conv(self, in_channels, out_channels, kernel_size=4):
-        # if stride == 2:
-        #   padding = size - 1 - (size - k) // 2
-        return nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride=2, padding=34, bias=False),
-            nn.LeakyReLU(0.2))
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.convout(x)
         x = F.sigmoid(x)
         return x

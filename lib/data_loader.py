@@ -1,3 +1,4 @@
+import os
 from scandir import scandir
 import numpy as np
 
@@ -51,6 +52,27 @@ class FaceImages(Dataset):
         image_loader = ImageLoader(
             random_transform_args=self.random_transform_args, 
             random_warp_args=self.random_warp_args)
+        self.load_images(transform=transform)
+        
+    def __getitem__(self, index):
+        distorted_img = self.distorted_imgs[index]
+        target_img = self.target_imgs[index]
+        return distorted_img, target_img
+
+    def __len__(self):
+        return len(self.image_paths)
+    
+    def shuffle(self):
+        perm_indices = np.random.permutation(len(self))
+        # self.distorted_imgs = self.distorted_imgs[perm_index]
+        # self.target_imgs = self.target_imgs[perm_index]
+        self.distorted_imgs = [self.distorted_imgs[i] for i in perm_indices]
+        self.target_imgs = [self.target_imgs[i] for i in perm_indices]
+
+    def load_images(self, transform=None):
+        image_loader = ImageLoader(
+            random_transform_args=self.random_transform_args, 
+            random_warp_args=self.random_warp_args)
 
         images = [image_loader.read_image(path) for path in self.image_paths]
         self.distorted_imgs, self.target_imgs = [], []
@@ -60,12 +82,13 @@ class FaceImages(Dataset):
                 distorted_img, target_img = transform([distorted_img, target_img])
             self.distorted_imgs.append(distorted_img)
             self.target_imgs.append(target_img)
-        
-    def __getitem__(self, index):
-        index = np.random.randint(0, len(self.image_paths))
-        distorted_img = self.distorted_imgs[index]
-        target_img = self.target_imgs[index]
-        return distorted_img, target_img
 
-    def __len__(self):
-        return len(self.image_paths)
+
+class GlobalFaceImages(FaceImages):
+    def __init__(self, data_dir, transform=None):
+        
+        self.image_paths = []
+        for dirname in os.listdir(data_dir):
+            self.image_paths += get_image_paths(
+                os.path.join(data_dir, dirname))
+        self.load_images(transform=transform)
