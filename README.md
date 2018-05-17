@@ -49,7 +49,7 @@ optional arguments:
 ### 2. 모델을 학습한다.
 
 ```
-$ python multi_ae.py -d ./data --init-dim 32 -m ./model/multi_32 -o ./output/multi_32 --log-interval 1
+$ python multi_ae.py -d ./data --init-dim 64 -code-dim 256 -m ./model/test -o ./output/test --log-interval 1
 ```
 
 - 학습된 모델은 기본으로 `./model/multi/`에 저장된다. 위의 명령처럼 직접 지정해줄 수도 있다.
@@ -61,12 +61,12 @@ $ python multi_ae.py -d ./data --init-dim 32 -m ./model/multi_32 -o ./output/mul
 ```
 - encoder
 input:  (  3,  64,  64)
-conv1:  ( init_dim,  64,  64) = ( 32,  64,  64)
+conv1:  ( init_dim=32,  64,  64)
 conv2:  ( 64,  64,  64)
 conv3:  (128,  64,  64)
 conv4:  (256,  64,  64)
 reshape:  (256*64*64, )
-linear1:  (code_dim, ) = (1024, )
+linear1:  (code_dim=1024, )
 linear2:  (1024*4*4, )
 reshape:  (1024, 4, 4)
 upscale:  ( 512, 8, 8)
