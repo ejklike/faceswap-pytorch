@@ -68,11 +68,10 @@ parser.add_argument('--seed',
                     default=1,
                     help='random seed (default: 1)')
 
-parser.add_argument('--fix_enc', 
+parser.add_argument('--fix-enc',
                     action='store_true', 
                     default=False,
                     help='fix encoder and train decoder only')
-
 
 args = parser.parse_args()
 
@@ -94,13 +93,13 @@ encoder_args = dict(
     init_dim=args.init_dim,
     code_dim=args.code_dim)
 encoder = get_model('encoder', FaceEncoder, device=device, **encoder_args)
-print('')
-
 ###
 if args.fix_enc:
+    print('encoder will not be trained!')
     for param in encoder.parameters():
         param.requires_grad = False
 ###
+print('')
 
 # FACE IDs for training
 face_ids = get_face_ids(args.data_dir)
@@ -133,7 +132,7 @@ def train(epoch, face_id, decoder, optimizer, draw_img=False, loop=10):
     encoder.train()
     decoder.train()
     for loop_idx in range(1, loop + 1):
-        dataset[face_id].shuffle()
+        dataset[face_id].distort_and_shuffle_images()
         dataloader = torch.utils.data.DataLoader(
             dataset[face_id], batch_size=args.batch_size, shuffle=True, **dataloader_args)
         for batch_idx, (warped, target) in enumerate(dataloader):
@@ -165,6 +164,7 @@ def train(epoch, face_id, decoder, optimizer, draw_img=False, loop=10):
 def test(epoch, face_id, decoder, draw_img=False):
     encoder.eval()
     decoder.eval()
+    dataset[face_id].distort_and_shuffle_images()
     dataloader = torch.utils.data.DataLoader(
             dataset[face_id], 
             batch_size=args.batch_size, shuffle=True, **dataloader_args)

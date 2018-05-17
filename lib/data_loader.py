@@ -48,11 +48,13 @@ class FaceImages(Dataset):
     }
 
     def __init__(self, data_dir, transform=None):
-        self.image_paths = get_image_paths(data_dir)
-        image_loader = ImageLoader(
+        image_paths = get_image_paths(data_dir)
+        self.image_loader = ImageLoader(
             random_transform_args=self.random_transform_args, 
             random_warp_args=self.random_warp_args)
-        self.load_images(transform=transform)
+        self.original_images = [
+            self.image_loader.read_image(path) for path in image_paths]
+        self.transform = transform
         
     def __getitem__(self, index):
         distorted_img = self.distorted_imgs[index]
@@ -60,35 +62,33 @@ class FaceImages(Dataset):
         return distorted_img, target_img
 
     def __len__(self):
-        return len(self.image_paths)
+        return len(self.original_images)
     
     def shuffle(self):
         perm_indices = np.random.permutation(len(self))
-        # self.distorted_imgs = self.distorted_imgs[perm_index]
-        # self.target_imgs = self.target_imgs[perm_index]
         self.distorted_imgs = [self.distorted_imgs[i] for i in perm_indices]
         self.target_imgs = [self.target_imgs[i] for i in perm_indices]
 
-    def load_images(self, transform=None):
-        image_loader = ImageLoader(
-            random_transform_args=self.random_transform_args, 
-            random_warp_args=self.random_warp_args)
-
-        images = [image_loader.read_image(path) for path in self.image_paths]
+    def distort_and_shuffle_images(self):
         self.distorted_imgs, self.target_imgs = [], []
-        for image in images:        
-            distorted_img, target_img = image_loader.transform_image(image)
-            if transform is not None:
-                distorted_img, target_img = transform([distorted_img, target_img])
+        for image in self.original_images:
+            distorted_img, target_img = self.image_loader.transform_image(image)
+            if self.transform is not None:
+                distorted_img, target_img = self.transform([distorted_img, target_img])
             self.distorted_imgs.append(distorted_img)
             self.target_imgs.append(target_img)
+        self.shuffle()
 
 
 class GlobalFaceImages(FaceImages):
     def __init__(self, data_dir, transform=None):
-        
-        self.image_paths = []
+        image_paths = []
         for dirname in os.listdir(data_dir):
-            self.image_paths += get_image_paths(
+            image_paths += get_image_paths(
                 os.path.join(data_dir, dirname))
-        self.load_images(transform=transform)
+        self.image_loader = ImageLoader(
+            random_transform_args=self.random_transform_args, 
+            random_warp_args=self.random_warp_args)
+        self.original_images = [
+            self.image_loader.read_image(path) for path in image_paths]
+        self.transform = transform
