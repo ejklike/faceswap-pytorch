@@ -40,13 +40,13 @@ class Convert():
                         (2, 0, 1))).float().div(255.0).unsqueeze_(0).cuda()
         new_face = self.decoder(self.encoder(normalized_tensor)) # it returns rgb, mask
         
-        ###
-        print('save_image')
-        nor_face_fig = torch.cat([normalized_tensor, normalized_tensor], dim=0)
-        new_face_fig = torch.cat([new_face, new_face], dim=0)
-        imwrite([nor_face_fig, new_face_fig], 'tmp.png', size=2)
-        ###
-        print('done saving')
+        # ###
+        # print('save_image')
+        # nor_face_fig = torch.cat([normalized_tensor, normalized_tensor], dim=0)
+        # new_face_fig = torch.cat([new_face, new_face], dim=0)
+        # imwrite([nor_face_fig, new_face_fig], 'tmp.png', size=2)
+        # ###
+        # print('done saving')
 
         new_face = new_face.data.cpu().numpy()
         new_face = np.reshape(new_face, (3, 64, 64)).transpose((1, 2, 0))
