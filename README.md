@@ -58,23 +58,22 @@ optional arguments:
 ### 2. 모델을 학습한다.
 
 ```
-$ python multi_ae.py -d ./data --init-dim 64 -code-dim 256 -m ./model/test -o ./output/test --log-interval 1
+$ python multi_ae.py -d ./data --init-dim 64 --code-dim 256 -m ./model/test -o ./output/test --log-interval 1
 ```
 
 - 학습된 모델은 기본으로 `./model/multi/`에 저장된다. 위의 명령처럼 직접 지정해줄 수도 있다.
 - 모델 입력/출력/타겟 이미지는 기본으로 `./output/multi/`에 저장된다. 위의 명령처럼 직접 지정해줄 수도 있다.
 - `log_interval`마다 인당 epoch 100씩 공용 encoder와 사람별 decoder를 학습한다.
     - `log_interval` 내에서 학습을 마치면 모델을 저장하고, 모델 입력/출력/타겟 이미지를 저장한다.
-    
-- 모델 구조 (`init_dim=32, code_dim=1024`)
+
+- 모델 구조 (`init_dim=32, code_dim=1024`의 경우)
 ```
 - encoder
 input:  (  3,  64,  64)
 conv1:  ( init_dim=32,  64,  64)
 conv2:  ( 64,  64,  64)
 conv3:  (128,  64,  64)
-conv4:  (256,  64,  64)
-reshape:  (256*64*64, )
+reshape:  (128*64*64, )
 linear1:  (code_dim=1024, )
 linear2:  (1024*4*4, )
 reshape:  (1024, 4, 4)
