@@ -64,9 +64,9 @@ class ConvertProcessor(object):
             self.num_faces_detected += 1
 
     def convert(self, encoder, decoder, **converter_args):
-            converter = Convert(encoder, decoder, **converter_args)
+        converter = Convert(encoder, decoder, **converter_args)
 
-        # try:
+        try:
             for filename, image, faces in self.prepare_images():
                 for face in faces:
                     image = converter.patch_image(image, face, size=64)
@@ -74,8 +74,8 @@ class ConvertProcessor(object):
                 output_file = os.path.join(
                     self.output_dir, Path(filename).name)
                 cv2.imwrite(str(output_file), image)
-        # except Exception as e:
-            # print('Failed to convert image: {}. Reason: {}'.format(filename, e))
+        except Exception as e:
+            print('Failed to convert image: {}. Reason: {}'.format(filename, e))
 
     def finalize(self):
         print('-------------------------')

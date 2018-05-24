@@ -41,13 +41,14 @@ class BasicLoss(nn.Module):
     def forward(self, output, target):
         # MAE loss
         l1_loss = nn.L1Loss()(output, target)
-        return l1_loss
-        # # Edge loss (similar with total variation loss)
-        # edge_loss_w = t.mean(t.abs(
-        #     self.first_order(output, axis=2) - self.first_order(target, axis=2)))
-        # edge_loss_h = t.mean(t.abs(
-        #     self.first_order(output, axis=3) - self.first_order(target, axis=3)))
-        # return l1_loss + edge_loss_w + edge_loss_h
+        # return l1_loss
+        
+        # Edge loss (similar with total variation loss)
+        edge_loss_w = t.mean(t.abs(
+            self.first_order(output, axis=2) - self.first_order(target, axis=2)))
+        edge_loss_h = t.mean(t.abs(
+            self.first_order(output, axis=3) - self.first_order(target, axis=3)))
+        return l1_loss + edge_loss_w + edge_loss_h
 
     def first_order(self, x, axis=1):
         _, _, w, h = x.shape
@@ -165,8 +166,8 @@ class FaceDecoder(BasicModule):
         self.upscale2 = upscale(256, 128)
         self.upscale3 = upscale(128, 64)
 
-        self.res_block1 = BasicResBlock(64, 64, kernel_size=3)
-        self.res_block2 = BasicResBlock(64, 64, kernel_size=3)
+        # self.res_block1 = BasicResBlock(64, 64, kernel_size=3)
+        # self.res_block2 = BasicResBlock(64, 64, kernel_size=3)
 
         # if stride == 1:
         #   padding = (k - 1) // 2
@@ -176,8 +177,8 @@ class FaceDecoder(BasicModule):
         x = self.upscale1(x) # (256, 16, 16)
         x = self.upscale2(x) # (128, 32, 32)
         x = self.upscale3(x) # (64, 64, 64)
-        x = self.res_block1(x)
-        x = self.res_block2(x)
+        # x = self.res_block1(x)
+        # x = self.res_block2(x)
         x = self.conv(x)     # (3, 64, 64)
         x = F.sigmoid(x)
         return x

@@ -60,19 +60,21 @@ class Convert():
 
         cv2.warpAffine(new_face, mat, image_size, new_image, cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT)
 
-        # if self.seamless_clone:
-        #     unitMask = np.clip(image_mask * 365, 0, 255).astype(np.uint8)
-        #     maxregion = np.argwhere(unitMask==255)
+        if self.seamless_clone:
+            unitMask = np.clip(image_mask * 255, 0, 255).astype(np.uint8) # * 365??? * 255?
+            maxregion = np.argwhere(unitMask==255)
 
-        #     if maxregion.size > 0:
-        #         miny,minx = maxregion.min(axis=0)[:2]
-        #         maxy,maxx = maxregion.max(axis=0)[:2]
-        #         lenx = maxx - minx
-        #         leny = maxy - miny
-        #         masky = int(minx+(lenx//2))
-        #         maskx = int(miny+(leny//2))
-        #         outimage = cv2.seamlessClone(new_image.astype(np.uint8),base_image.astype(np.uint8),unitMask,(masky,maskx) , cv2.NORMAL_CLONE )
-        #         return outimage
+            if maxregion.size > 0:
+                miny, minx = maxregion.min(axis=0)[:2]
+                maxy, maxx = maxregion.max(axis=0)[:2]
+                lenx = maxx - minx
+                leny = maxy - miny
+                masky = int(minx + (lenx//2))
+                maskx = int(miny + (leny//2))
+                outimage = cv2.seamlessClone(
+                    new_image.astype(np.uint8), base_image.astype(np.uint8),
+                    unitMask, (masky, maskx), cv2.NORMAL_CLONE)
+                return outimage
 
         foreground = cv2.multiply(image_mask, new_image.astype(float))
         background = cv2.multiply(1.0 - image_mask, base_image.astype(float))
