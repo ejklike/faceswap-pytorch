@@ -200,10 +200,9 @@ for epoch in range(1, args.epochs + 1):
         ###
         optimizer = get_optimizer(args.lr, optimizer_path[face_id], parameters)
         
-        test(epoch * inner_loop, face_id, decoder, draw_img=is_save)
         train(epoch, face_id, decoder, optimizer, 
             draw_img=is_save, loop=inner_loop)
-        test(epoch * inner_loop + 1, face_id, decoder, draw_img=is_save)
+        test(epoch * inner_loop, face_id, decoder, draw_img=is_save)
 
         print('')
         ###
