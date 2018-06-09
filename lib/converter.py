@@ -35,11 +35,12 @@ class Convert():
         return self.apply_new_face(image, new_face, image_mask, mat, image_size, size)
 
     def get_new_face(self, image, mat, size):
+        # (size, size) facial image aligned according to reference landmark
         face = cv2.warpAffine(image, mat, (size, size))
         normalized_tensor = torch.from_numpy(face.transpose(
                         (2, 0, 1))).float().div(255.0).unsqueeze_(0).cuda()
-        new_face = self.decoder(self.encoder(normalized_tensor)) # it returns rgb, mask
-        
+        new_face = self.decoder(self.encoder(normalized_tensor))
+
         # ###
         # print('save_image')
         # nor_face_fig = torch.cat([normalized_tensor, normalized_tensor], dim=0)

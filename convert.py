@@ -37,6 +37,8 @@ class ConvertProcessor(object):
         self.input_image_fnames = self.read_directory(self.input_dir)
         self.images_found = len(self.input_image_fnames)
 
+        self.face_detector = FaceAlignment()
+
     def read_directory(self, directory):
         types = ('*.jpg', '*.png')
         images_list = []
@@ -59,7 +61,7 @@ class ConvertProcessor(object):
             yield filename, image, faces_and_landmarks
 
     def get_faces_and_landmarks(self, iamge):
-        for face, landmark in FaceAlignment().get_landmarks(iamge):
+        for face, landmark in self.face_detector.get_landmarks(iamge):
             yield DetectedFace(face, landmark)
             self.num_faces_detected += 1
 
@@ -93,17 +95,10 @@ if __name__ == '__main__':
                         help="Input directory. A directory containing the files \
                         you wish to process. Defaults to './input/'")
 
-    parser.add_argument('-o', '--output-dir',
-                        dest="output_dir",
-                        default="./output/convert/",
-                        help="Output directory. This is where the converted files will \
-                            be stored. Defaults to './output/convert/'")
-
-    parser.add_argument('-m', '--model-dir',
-                        dest="model_dir",
-                        default="./model/gan/",
-                        help="Model directory. A directory containing the trained model \
-                        you wish to process. Defaults to './model/gan/'")
+    parser.add_argument('-n', '--model-name',
+                        dest="model_name",
+                        default="model_name",
+                        help="Mode name. Defaults to 'model_name'")
 
     parser.add_argument('-tg', '--target',
                         type=str,
@@ -120,8 +115,8 @@ if __name__ == '__main__':
     parser.add_argument('--code-dim', 
                         type=int, 
                         dest='code_dim', 
-                        default=512,
-                        help="the number of channel in encoded tensor (default: 512)")
+                        default=1024,
+                        help="the number of channel in encoded tensor (default: 1024)")
 
     parser.add_argument('-S', '--seamless',
                         action="store_true",
@@ -150,8 +145,8 @@ if __name__ == '__main__':
 
     # MODEL/OUTPUT DIR
     input_dir = args.input_dir
-    output_dir = mkdir(args.output_dir)
-    model_dir = mkdir(args.model_dir)
+    output_dir = mkdir(os.path.join('./output', args.model_name, 'convert'))
+    model_dir = mkdir(os.path.join('./output', args.model_name))
 
     # ENCODER
     encoder_args = dict(
@@ -167,7 +162,7 @@ if __name__ == '__main__':
     decoder = get_model('decoder_' + args.target, FaceDecoder, device=device, **decoder_args).eval()
     print('')
 
-    processor = ConvertProcessor(args.input_dir, args.output_dir)
+    processor = ConvertProcessor(args.input_dir, output_dir)
     converter_args = dict(
         seamless_clone=args.seamless_clone,
         mask_type=args.mask_type)

@@ -128,10 +128,11 @@ class FaceEncoder(BasicModule):
         self.conv1 = self.conv(3, init_dim)
         self.conv2 = self.conv(init_dim, init_dim * 2)
         self.conv3 = self.conv(init_dim * 2, init_dim * 4)
-        # self.conv4 = self.conv(init_dim * 4, init_dim * 8)
+        self.conv4 = self.conv(init_dim * 4, init_dim * 8)
 
-        # use two linear layers to reduce #parameters
-        self.linear1 = nn.Linear(init_dim*4 * 64*64, code_dim)
+        # # use two linear layers to squeeze image
+        # it helps to reduce blur... Dont know why;;
+        self.linear1 = nn.Linear(init_dim*8 * 4*4, code_dim)
         self.linear2 = nn.Linear(code_dim, 1024 * 4*4)
 
         self.upscale = upscale(1024, 512)
@@ -140,19 +141,19 @@ class FaceEncoder(BasicModule):
         # if stride == 2:
         #   padding = size - 1 - (size - k) // 2
         return nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride=2, padding=34),
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride=2, padding=2),
             nn.LeakyReLU(0.1))
 
-    def forward(self, x):
+    def forward(self, x): # (3, 64, 64)
         b, c, w, h = x.shape
-        x = self.conv1(x) # (128, 64, 64)
-        x = self.conv2(x) # (256, 64, 64)
-        x = self.conv3(x) # (512, 64, 64)
-        # x = self.conv4(x) # (1024, 64, 64)
-        x = x.view(b, -1) # (1024*64*64)
+        x = self.conv1(x) # (128, 32, 32)
+        x = self.conv2(x) # (256, 16, 16)
+        x = self.conv3(x) # (512, 8, 8)
+        x = self.conv4(x) # (1024, 4, 4)
+        x = x.view(b, -1) # (1024*4*4)
         x = self.linear1(x) # (cdim)
         x = self.linear2(x) # (1024*4*4)
-        x = x.view(-1, 1024, 4, 4) # (1024, 4, 4)
+        x = x.view(-1, 1024, 4, 4)
         x = self.upscale(x) # (512, 8, 8)
         return x
 

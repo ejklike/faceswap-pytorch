@@ -18,14 +18,10 @@ parser.add_argument('-d', '--data-dir',
                     dest='data_dir', 
                     default='./data',
                     help="input data directory")
-parser.add_argument('-o', '--output-dir', 
-                    dest='output_dir', 
-                    default='./output/multi',
-                    help="output data directory")
-parser.add_argument('-m', '--model-dir', 
-                    dest='model_dir', 
-                    default='./model/multi',
-                    help="model pth directory")
+parser.add_argument('-n', '--model-name', 
+                    dest='model_name', 
+                    default='./output/model_name',
+                    help="model name (which will become output dir name)")
 
 parser.add_argument('-b', '--batch-size', 
                     dest='batch_size', 
@@ -35,13 +31,13 @@ parser.add_argument('-b', '--batch-size',
 parser.add_argument('--init-dim', 
                     dest='init_dim', 
                     type=int, 
-                    default=32,
+                    default=128,
                     help="the number of initial channel (default: 32)")
 parser.add_argument('--code-dim', 
                     dest='code_dim', 
                     type=int, 
-                    default=512,
-                    help="the number of channel in encoded tensor (default: 512)")
+                    default=1024,
+                    help="the number of channel in encoded tensor (default: 1024)")
 parser.add_argument('--log-interval', 
                     type=int, 
                     default=1,
@@ -51,7 +47,7 @@ parser.add_argument('--epochs',
                     type=int, 
                     default=100000000, 
                     help='number of epochs to train (default: 100000000)')
-parser.add_argument('--inner_loop', 
+parser.add_argument('--inner-loop', 
                     type=int, 
                     default=100, 
                     help='number of loop in an epoch for each face (default: 100)')
@@ -84,12 +80,11 @@ use_cuda = args.no_cuda is False and torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
 # MODEL/OUTPUT DIR
-model_dir = mkdir(args.model_dir)
-output_dir = mkdir(args.output_dir)
+output_dir = mkdir(os.path.join('./output', args.model_name))
 
 # ENCODER
 encoder_args = dict(
-    path=os.path.join(model_dir, 'encoder.pth'),
+    path=os.path.join(output_dir, 'encoder.pth'),
     init_dim=args.init_dim,
     code_dim=args.code_dim)
 encoder = get_model('encoder', FaceEncoder, device=device, **encoder_args)
@@ -121,9 +116,9 @@ decoder_path = dict()
 optimizer_path = dict()
 for face_id in face_ids:
     decoder_path[face_id] = os.path.join(
-        model_dir, 'decoder{}.pth'.format(face_id))
+        output_dir, 'decoder{}.pth'.format(face_id))
     optimizer_path[face_id] = os.path.join(
-        model_dir, 'optimizer{}.pth'.format(face_id))
+        output_dir, 'optimizer{}.pth'.format(face_id))
 
 # LOSSES
 criterion = BasicLoss().to(device)
@@ -155,8 +150,8 @@ def train(epoch, face_id, decoder, optimizer, draw_img=False, loop=10):
                               loss.item()), end='')
 
     if draw_img:
-        output_dir = mkdir(os.path.join(args.output_dir, face_id))
-        fname = '{}/epoch_{}.png'.format(output_dir, epoch * loop)
+        this_output_dir = mkdir(os.path.join(output_dir, face_id))
+        fname = '{}/epoch_{}.png'.format(this_output_dir, epoch * loop)
         img_list = [warped, output, target]
         imwrite(img_list, fname, size=8)
 
@@ -176,8 +171,8 @@ def test(epoch, face_id, decoder, draw_img=False):
         output = decoder(encoder(warped))
 
         if draw_img:
-            output_dir = mkdir(os.path.join(args.output_dir, face_id))
-            fname = '{}/epoch_{}_test.png'.format(output_dir, epoch)
+            this_output_dir = mkdir(os.path.join(output_dir, face_id))
+            fname = '{}/epoch_{}_test.png'.format(this_output_dir, epoch)
             img_list = [warped, output, target]
             imwrite(img_list, fname, size=8)
 

@@ -43,7 +43,7 @@ def random_transform(image, rotation_range,
         w, h, rotation_range, zoom_range, shift_range)
     result = cv2.warpAffine(
         image, mat, size, borderMode=cv2.BORDER_REPLICATE)
-    
+
     # random flip
     if np.random.random() < random_flip:
         result = result[:, ::-1]
@@ -112,7 +112,7 @@ class ImageLoader(object):
         except TypeError:
             raise Exception("Error while reading image", image_path)
         return image
-    
+
     def transform_image(self, image):
         assert image.shape == (256, 256, 3)
 
