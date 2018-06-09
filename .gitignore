@@ -9,6 +9,7 @@ model
 trash
 
 *.pkl
+*.tar
 *.ipynb
 *.png
 *.jpg
