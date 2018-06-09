@@ -13,4 +13,5 @@ trash
 *.png
 *.jpg
 
+*.sh
 *.xlsx

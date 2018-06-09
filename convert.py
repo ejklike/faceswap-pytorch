@@ -1,93 +1,39 @@
 import argparse
 import cv2
 import os
-import glob
 
 from pathlib import Path
-from tqdm import tqdm
 import torch
 
 from models import *
+from lib.directory_processor import DirectoryProcessor
 from lib.converter import Convert
-from lib.face_alignment import FaceAlignment
 from lib.utils import mkdir
 
-# from lib.utils import get_target_paths, get_image_paths, get_folder
 
-class DetectedFace(object):
-    def __init__(self, face, landmark):
-        self.x = face.left()
-        self.y = face.top()
-        self.w = face.right() - face.left()
-        self.h = face.bottom() - face.top()
-        self.landmark = landmark
-
-
-class ConvertProcessor(object):
-
-    images_found = 0
-    num_faces_detected = 0
+class ConvertProcessor(DirectoryProcessor):
 
     def __init__(self, input_dir, output_dir):
-        self.input_dir = input_dir
-        self.output_dir = output_dir
-        print("Input Directory: {}".format(self.input_dir))
-        print("Output Directory: {}".format(self.output_dir))
-
-        self.input_image_fnames = self.read_directory(self.input_dir)
-        self.images_found = len(self.input_image_fnames)
-
-        self.face_detector = FaceAlignment()
-
-    def read_directory(self, directory):
-        types = ('*.jpg', '*.png')
-        images_list = []
-        for files in types:
-            images_list.extend(glob.glob(os.path.join(directory, files)))
-        return images_list
-
-    def prepare_images(self):
-        for filename in tqdm(self.input_image_fnames):
-            image = cv2.imread(filename)
-            faces_and_landmarks = self.get_faces_and_landmarks(filename)
-            # ###
-            # simage = image.copy()
-            # for d in faces_and_landmarks:
-            #     cv2.rectangle(simage, (d.x, d.y), (d.x+d.w, d.y+d.h), (0,255,0) , 3)
-            #     for x in d.landmark[17:]:
-            #         cv2.circle(simage, (x[0], x[1]), 2, (0,0,255), -1)
-            #     cv2.imwrite('./detected{}.jpg'.format(filename[-6:]), simage) ###
-            # ###
-            yield filename, image, faces_and_landmarks
-
-    def get_faces_and_landmarks(self, iamge):
-        for face, landmark in self.face_detector.get_landmarks(iamge):
-            yield DetectedFace(face, landmark)
-            self.num_faces_detected += 1
+        super(ConvertProcessor, self).__init__(input_dir, output_dir)
 
     def convert(self, encoder, decoder, **converter_args):
         converter = Convert(encoder, decoder, **converter_args)
 
-        try:
-            for filename, image, faces in self.prepare_images():
-                for face in faces:
-                    image = converter.patch_image(image, face, size=64)
+        for filename, image, landmarks_and_matrices in self.read_images():
+            try:
+                for landmark, align_mat in landmarks_and_matrices:
+                    image = converter.patch_image(image, landmark, align_mat, size=64)
 
                 output_file = os.path.join(
                     self.output_dir, Path(filename).name)
                 cv2.imwrite(str(output_file), image)
-        except Exception as e:
-            print('Failed to convert image: {}. Reason: {}'.format(filename, e))
-
-    def finalize(self):
-        print('-------------------------')
-        print('Images found:        {}'.format(self.images_found))
-        print('Faces detected:      {}'.format(self.num_faces_detected))
-        print('-------------------------')
+            except Exception as e:
+                print('Failed to convert image: {}. Reason: {}'.format(filename, e))
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Convert a source image to a new one with the face swapped')
+    parser = argparse.ArgumentParser(
+        description='Convert a source image to a new one with the face swapped')
 
     parser.add_argument('-i', '--input-dir',
                         dest="input_dir",

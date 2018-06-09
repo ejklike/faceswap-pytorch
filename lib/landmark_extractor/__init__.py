@@ -1,0 +1,1 @@
+from lib.landmark_extractor.api import LandmarkExtractor

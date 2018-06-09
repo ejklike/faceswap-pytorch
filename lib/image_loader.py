@@ -1,122 +1,71 @@
-import cv2
+import os
+from scandir import scandir
 import numpy as np
 
-from lib.umeyama import umeyama
+from torch import from_numpy
+from torch.utils.data.dataset import Dataset
+
+from lib.image_augmetor import ImageAugmentor
+from lib.utils import get_image_paths
 
 
-def get_random_affine_transformation(width, height, 
-        rotation_range, zoom_range, shift_range):
+class ToTensor(object):
     """
-    get a random affine transformation matrix
-
-    input:
-        rotation_range: angle (degree, 0 ~ 180)
-        zoom_range: increase/decrease (0 ~ 1) 
-        shift_range: (0 ~ inf)
-    
-    output:
-        a 2x3 matrix for affine transformation
+    Convert ndarray image to Tensor.
+    (https://pytorch.org/tutorials/beginner/data_loading_tutorial.html)
     """
-    # rotation and scale
-    center = (width // 2, height // 2)
-    angle = np.random.uniform(-rotation_range, rotation_range)
-    scale = np.random.uniform(1 - zoom_range, 1 + zoom_range)
-    mat = cv2.getRotationMatrix2D(center, angle, scale)
+    def __call__(self, images):
+        def _to_tensor(image):
+            # swap color axis because
+            # numpy image: H x W x C
+            # torch image: C X H X W
+            image = image.transpose((2, 0, 1)).astype(np.float32)
+            return from_numpy(image)
 
-    # translation
-    tx = np.random.uniform(-shift_range, shift_range) * width
-    ty = np.random.uniform(-shift_range, shift_range) * height
-    mat[:, 2] += (tx, ty)
-    
-    return mat
+        images = [_to_tensor(img) for img in images]
+        return images
 
-def random_transform(image, rotation_range,
-                     zoom_range, shift_range, random_flip):
-    """
-    rotate, scale, and translate an image in random
-    """
-    h, w, _ = image.shape
 
-    # affine transform
-    size = (w, h)
-    mat = get_random_affine_transformation(
-        w, h, rotation_range, zoom_range, shift_range)
-    result = cv2.warpAffine(
-        image, mat, size, borderMode=cv2.BORDER_REPLICATE)
+class FaceImages(Dataset):
+    random_transform_args = {
+        'rotation_range': 10,
+        'zoom_range': 0.05,
+        'shift_range': 0.05,
+        'random_flip': 0.4,
+    }
+    random_warp_args = {
+        'coverage': 180, # 600, #160 #180 #200
+        'warp_scale': 5,
+    }
 
-    # random flip
-    if np.random.random() < random_flip:
-        result = result[:, ::-1]
-    return result
+    def __init__(self, data_dir, transform=None):
+        image_paths = get_image_paths(data_dir)
+        self.image_augmentor = ImageAugmentor(
+            random_transform_args=self.random_transform_args, 
+            random_warp_args=self.random_warp_args)
+        self.original_images = [
+            self.image_loader.read_image(path) for path in image_paths]
+        self.transform = transform
 
-def random_warp_64(image, coverage, warp_scale):
-    """
-    get pair of random warped images from aligned face image
+    def __getitem__(self, index):
+        distorted_img = self.distorted_imgs[index]
+        target_img = self.target_imgs[index]
+        return distorted_img, target_img
 
-    input
-        coverage: length (pixel) of image to crop
-        warp_scale: warping range of grid points
+    def __len__(self):
+        return len(self.original_images)
 
-    output
+    def shuffle(self):
+        perm_indices = np.random.permutation(len(self))
+        self.distorted_imgs = [self.distorted_imgs[i] for i in perm_indices]
+        self.target_imgs = [self.target_imgs[i] for i in perm_indices]
 
-    """
-    size = image.shape[0] # squared image!
-    center = size //2
-
-    # 5 x 5 grid points in the coverage area
-    grid_size = (5, 5)
-    range_ = np.linspace(center - coverage//2, 
-                         center + coverage//2, 
-                         grid_size[0])
-    mapx = np.broadcast_to(range_, grid_size)
-    mapy = mapx.T
-
-    # warp points randomly
-    mapx = mapx + np.random.normal(size=grid_size, scale=warp_scale)
-    mapy = mapy + np.random.normal(size=grid_size, scale=warp_scale)
-
-    # densify grid points (5x5 -> 64x64)
-    # (side values are removed since their values are 
-    #  almost same and thus make duplicate neighboring pixels)
-    interp_mapx = cv2.resize(mapx, (80, 80))[8:72, 8:72].astype('float32')
-    interp_mapy = cv2.resize(mapy, (80, 80))[8:72, 8:72].astype('float32')
-
-    warped_image = cv2.remap(image, interp_mapx, interp_mapy, cv2.INTER_LINEAR)
-
-    src_points = np.stack([mapx.ravel(), mapy.ravel() ], axis=-1)
-    dst_points = np.mgrid[0:65:16, 0:65:16].T.reshape(-1,2)
-    mat = umeyama(src_points, dst_points, True)[0:2]
-
-    target_image = cv2.warpAffine(image, mat, (64, 64))
-
-    return warped_image, target_image
-
-def normalize(img):
-    """
-    scale from (0, 255) to (0, 1)
-    """
-    return img / 255.0
-
-class ImageLoader(object):
-    """
-    input_image_size = (256, 256)
-    output_image_size = (64, 64)
-    """
-    def __init__(self, random_transform_args, random_warp_args):
-        self.random_transform_args = random_transform_args
-        self.random_warp_args = random_warp_args
-
-    def read_image(self, image_path):
-        try:
-            image = normalize(cv2.imread(image_path))
-        except TypeError:
-            raise Exception("Error while reading image", image_path)
-        return image
-
-    def transform_image(self, image):
-        assert image.shape == (256, 256, 3)
-
-        # np.random.seed()
-        transformed_img = random_transform(image, **self.random_transform_args)
-        warped_img, target_img = random_warp_64(transformed_img, **self.random_warp_args)
-        return warped_img, target_img
+    def distort_and_shuffle_images(self):
+        self.distorted_imgs, self.target_imgs = [], []
+        for image in self.original_images:
+            distorted_img, target_img = self.image_augmentor.transform_image(image)
+            if self.transform is not None:
+                distorted_img, target_img = self.transform([distorted_img, target_img])
+            self.distorted_imgs.append(distorted_img)
+            self.target_imgs.append(target_img)
+        self.shuffle()

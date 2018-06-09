@@ -3,40 +3,39 @@
 
 import cv2
 import numpy as np
-
 import torch
 
-from lib.aligner import get_align_mat
 from lib.save_fig import imwrite
 
-class Convert():
+class Convert(object):
     def __init__(self, encoder, decoder, seamless_clone=False, mask_type="facehullandrect", **kwargs):
         self.encoder = encoder
         self.decoder = decoder
         self.seamless_clone = seamless_clone
         self.mask_type = mask_type.lower() # Choose in 'FaceHullAndRect','FaceHull','Rect'
 
-    def patch_image(self, image, face_detected, size):
+    def patch_image(self, image, landmark, align_mat, size):
         """
         image: full image (containing at least one face)
         face_detected: containing landmark info
         size: model input size
         """
-        # find affine transformation matrix to map 
+        # find affine transformation matrix to map
         # given landmarks to aligned landmarks in (size, size) image
-        mat = np.array(get_align_mat(face_detected)).reshape(2, 3) * size
+        mat = align_mat * size
 
         # get output image from faceswap model (64x64 image)
         new_face = self.get_new_face(image, mat, size)
 
         image_size = (image.shape[1], image.shape[0])
-        image_mask = self.get_image_mask(image, new_face, face_detected, mat, image_size)
+        image_mask = self.get_image_mask(image, new_face, landmark, mat, image_size)
 
         return self.apply_new_face(image, new_face, image_mask, mat, image_size, size)
 
     def get_new_face(self, image, mat, size):
         # (size, size) facial image aligned according to reference landmark
         face = cv2.warpAffine(image, mat, (size, size))
+        
         normalized_tensor = torch.from_numpy(face.transpose(
                         (2, 0, 1))).float().div(255.0).unsqueeze_(0).cuda()
         new_face = self.decoder(self.encoder(normalized_tensor))
@@ -52,7 +51,7 @@ class Convert():
         new_face = new_face.data.cpu().numpy()
         new_face = np.reshape(new_face, (3, 64, 64)).transpose((1, 2, 0))
         new_face = np.clip(new_face * 255, 0, 255).astype(image.dtype)
-        
+
         return new_face
 
     def apply_new_face(self, image, new_face, image_mask, mat, image_size, size):
@@ -83,7 +82,7 @@ class Convert():
         return outimage
 
 
-    def get_image_mask(self, image, new_face, face_detected, mat, image_size):
+    def get_image_mask(self, image, new_face, landmark, mat, image_size):
         face_mask = np.zeros(image.shape, dtype=float)
         if 'rect' in self.mask_type:
             face_src = np.ones(new_face.shape, dtype=float)
@@ -93,7 +92,7 @@ class Convert():
         hull_mask = np.zeros(image.shape,dtype=float)
         if 'hull' in self.mask_type:
             hull = cv2.convexHull(
-                np.array(face_detected.landmark).reshape((-1,2)).astype(int)).flatten().reshape((-1,2))
+                np.array(landmark).reshape((-1,2)).astype(int)).flatten().reshape((-1,2))
             cv2.fillConvexPoly(
                 hull_mask, hull, (1,1,1))
 
