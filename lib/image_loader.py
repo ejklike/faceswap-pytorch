@@ -34,7 +34,7 @@ class FaceImages(Dataset):
         'random_flip': 0.4,
     }
     random_warp_args = {
-        'coverage': 180, # 600, #160 #180 #200 # 256
+        'coverage': 180, # 600, #160 #180 #200
         'warp_scale': 5,
     }
 
