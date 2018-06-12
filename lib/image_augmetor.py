@@ -3,6 +3,8 @@ import numpy as np
 
 from lib.landmark_aligner.umeyama import umeyama
 
+# TODO: warp_scale, coverage ==> main args from argparse
+
 
 def get_random_affine_transformation(width, height, 
         rotation_range, zoom_range, shift_range):
@@ -49,45 +51,48 @@ def random_transform(image, rotation_range,
         result = result[:, ::-1]
     return result
 
-def random_warp_64(image, coverage, warp_scale):
+def random_warp(image, coverage, warp_scale, magnify_factor=1):
     """
     get pair of random warped images from aligned face image
 
     input
         coverage: length (pixel) of image to crop
         warp_scale: warping range of grid points
-
+        magnify_factor: for (64, 64) * magnify_factor image
     output
-
+        warped image of size (64, 64) * magnify_factor
     """
+    assert image.shape == (256,256,3)
     size = image.shape[0] # squared image!
     center = size //2
 
     # 5 x 5 grid points in the coverage area
-    grid_size = (5, 5)
+    grid_size = 5
     range_ = np.linspace(center - coverage//2, 
                          center + coverage//2, 
-                         grid_size[0])
-    mapx = np.broadcast_to(range_, grid_size)
+                         grid_size)
+    mapx = np.broadcast_to(range_, (grid_size, grid_size))
     mapy = mapx.T
 
     # warp points randomly
-    mapx = mapx + np.random.normal(size=grid_size, scale=warp_scale)
-    mapy = mapy + np.random.normal(size=grid_size, scale=warp_scale)
+    random_noise = np.random.normal(
+        size=(grid_size, grid_size), scale=warp_scale)
+    mapx = mapx + random_noise
+    mapy = mapy + random_noise
 
     # densify grid points (5x5 -> 64x64)
     # (side values are removed since their values are 
     #  almost same and thus make duplicate neighboring pixels)
-    interp_mapx = cv2.resize(mapx, (80, 80))[8:72, 8:72].astype('float32')
-    interp_mapy = cv2.resize(mapy, (80, 80))[8:72, 8:72].astype('float32')
+    interp_mapx = cv2.resize(mapx, (80*x, 80*x))[8*x:72*x, 8*x:72*x].astype('float32')
+    interp_mapy = cv2.resize(mapy, (80*x, 80*x))[8*x:72*x, 8*x:72*x].astype('float32')
 
     warped_image = cv2.remap(image, interp_mapx, interp_mapy, cv2.INTER_LINEAR)
 
     src_points = np.stack([mapx.ravel(), mapy.ravel() ], axis=-1)
-    dst_points = np.mgrid[0:65:16, 0:65:16].T.reshape(-1,2)
+    dst_points = np.mgrid[0:65*x:16*x, 0:65*x:16*x].T.reshape(-1,2)
     mat = umeyama(src_points, dst_points, True)[0:2]
 
-    target_image = cv2.warpAffine(image, mat, (64, 64))
+    target_image = cv2.warpAffine(image, mat, (64*x, 64*x))
 
     return warped_image, target_image
 
@@ -100,7 +105,7 @@ def normalize(img):
 class ImageAugmentor(object):
     """
     input_image_size = (256, 256)
-    output_image_size = (64, 64)
+    output_image_size = (64, 64), (128, 128)
     """
     def __init__(self, random_transform_args, random_warp_args):
         self.random_transform_args = random_transform_args
@@ -118,5 +123,6 @@ class ImageAugmentor(object):
 
         # np.random.seed()
         transformed_img = random_transform(image, **self.random_transform_args)
-        warped_img, target_img = random_warp_64(transformed_img, **self.random_warp_args)
+        warped_64, target_64 = random_warp_64(transformed_img, **self.random_warp_args)
+        warped_128, target_128 = random_warp_128(transformed_img, **self.random_warp_args)
         return warped_img, target_img
