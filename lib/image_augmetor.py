@@ -51,34 +51,42 @@ def random_transform(image, rotation_range,
         result = result[:, ::-1]
     return result
 
-def random_warp(image, coverage, warp_scale, magnify_factor=1):
+def get_randomly_warped_grid(coverage=180, warp_scale=5, image_size=256, n_grid=5):
+    """
+    return (n_grid, n_grid) points of warped points in the coverage region
+    ---
+    input
+        coverage: length (pixel) of image to crop
+        warp_scale: warping range of grid points
+    output
+
+    """
+    # 5 x 5 grid points in the coverage area
+    center = image_size //2
+    range_ = np.linspace(center - coverage//2, 
+                         center + coverage//2, 
+                         n_grid)
+    mapx = np.broadcast_to(range_, (n_grid, n_grid))
+    mapy = mapx.T
+
+    # warp grid points randomly
+    random_noise = np.random.normal(size=(n_grid, n_grid), scale=warp_scale)
+    mapx = mapx + random_noise
+    mapy = mapy + random_noise
+
+    return mapx, mapy
+
+def random_warp(image, mapx, mapy, magnify_factor=1):
     """
     get pair of random warped images from aligned face image
 
     input
-        coverage: length (pixel) of image to crop
-        warp_scale: warping range of grid points
+
         magnify_factor: for (64, 64) * magnify_factor image
     output
         warped image of size (64, 64) * magnify_factor
     """
     assert image.shape == (256,256,3)
-    size = image.shape[0] # squared image!
-    center = size //2
-
-    # 5 x 5 grid points in the coverage area
-    grid_size = 5
-    range_ = np.linspace(center - coverage//2, 
-                         center + coverage//2, 
-                         grid_size)
-    mapx = np.broadcast_to(range_, (grid_size, grid_size))
-    mapy = mapx.T
-
-    # warp points randomly
-    random_noise = np.random.normal(
-        size=(grid_size, grid_size), scale=warp_scale)
-    mapx = mapx + random_noise
-    mapy = mapy + random_noise
 
     # densify grid points (5x5 -> 64x64)
     # (side values are removed since their values are 
@@ -123,6 +131,9 @@ class ImageAugmentor(object):
 
         # np.random.seed()
         transformed_img = random_transform(image, **self.random_transform_args)
-        warped_64, target_64 = random_warp_64(transformed_img, **self.random_warp_args)
-        warped_128, target_128 = random_warp_128(transformed_img, **self.random_warp_args)
-        return warped_img, target_img
+
+        mapx, mapy = get_randomly_warped_grid(**self.random_warp_args)
+        warped_64, target_64 = random_warp(transformed_img, mapx, mapy, magnify_factor=1)
+        warped_128, target_128 = random_warp(transformed_img, mapx, mapy, magnify_factor=2)
+
+        return (warped_img, target_img
