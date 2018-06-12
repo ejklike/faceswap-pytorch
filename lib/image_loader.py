@@ -44,7 +44,7 @@ class FaceImages(Dataset):
             random_transform_args=self.random_transform_args, 
             random_warp_args=self.random_warp_args)
         self.original_images = [
-            self.image_loader.read_image(path) for path in image_paths]
+            self.image_augmentor.read_image(path) for path in image_paths]
         self.transform = transform
 
     def __getitem__(self, index):
