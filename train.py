@@ -3,7 +3,6 @@ import argparse
 from random import shuffle
 
 import torch
-from torch.autograd import Variable
 from torchvision import transforms
 
 from models import *
@@ -161,12 +160,12 @@ def test(epoch, face_id, decoder, draw_img=False):
     decoder.eval()
     dataset[face_id].distort_and_shuffle_images()
     dataloader = torch.utils.data.DataLoader(
-            dataset[face_id], 
+            dataset[face_id],
             batch_size=args.batch_size, shuffle=True, **dataloader_args)
     for batch_idx, (warped, target) in enumerate(dataloader):
         if batch_idx > 0:
             break
-        
+
         warped, target = warped.to(device), target.to(device)
         output = decoder(encoder(warped))
 
@@ -185,17 +184,17 @@ for epoch in range(1, args.epochs + 1):
     for face_id in face_ids:
         decoder_args = dict(path=decoder_path[face_id])
         decoder = get_model('decoder_' + face_id, FaceDecoder, device=device, **decoder_args)
-        
+
         ###
         if args.fix_enc:
             parameters = decoder.parameters()
         else:
             parameters = list(encoder.parameters()) + list(decoder.parameters())
-        # 
+        #
         ###
         optimizer = get_optimizer(args.lr, optimizer_path[face_id], parameters)
-        
-        train(epoch, face_id, decoder, optimizer, 
+
+        train(epoch, face_id, decoder, optimizer,
             draw_img=is_save, loop=inner_loop)
         test(epoch * inner_loop, face_id, decoder, draw_img=is_save)
 

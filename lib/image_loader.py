@@ -34,7 +34,7 @@ class FaceImages(Dataset):
         'random_flip': 0.4,
     }
     random_warp_args = {
-        'coverage': 180, # 600, #160 #180 #200
+        'coverage': 180, # 600, #160 #180 #200 #256
         'warp_scale': 5,
     }
 
@@ -44,8 +44,18 @@ class FaceImages(Dataset):
             random_transform_args=self.random_transform_args, 
             random_warp_args=self.random_warp_args)
         self.original_images = [
-            self.image_loader.read_image(path) for path in image_paths]
+            self.image_augmentor.read_image(path) for path in image_paths]
         self.transform = transform
+
+        # ### tmp for faceswap.py (resize function)
+        # self.distorted_imgs, self.target_imgs = [], []
+        # for image in self.original_images:
+        #     image = self.image_augmentor.resize_image(image)
+        #     if self.transform is not None:
+        #         distorted_img, target_img = self.transform([image, image])
+        #     self.distorted_imgs.append(distorted_img)
+        #     self.target_imgs.append(target_img)
+        # ###
 
     def __getitem__(self, index):
         distorted_img = self.distorted_imgs[index]
@@ -60,7 +70,7 @@ class FaceImages(Dataset):
         self.distorted_imgs = [self.distorted_imgs[i] for i in perm_indices]
         self.target_imgs = [self.target_imgs[i] for i in perm_indices]
 
-    def distort_and_shuffle_images(self):
+    def distort_images(self):
         self.distorted_imgs, self.target_imgs = [], []
         for image in self.original_images:
             distorted_img, target_img = self.image_augmentor.transform_image(image)
@@ -68,4 +78,7 @@ class FaceImages(Dataset):
                 distorted_img, target_img = self.transform([distorted_img, target_img])
             self.distorted_imgs.append(distorted_img)
             self.target_imgs.append(target_img)
+
+    def distort_and_shuffle_images(self):
+        self.distort_images()
         self.shuffle()

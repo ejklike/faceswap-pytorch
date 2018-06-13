@@ -113,10 +113,16 @@ class ImageAugmentor(object):
             raise Exception("Error while reading image", image_path)
         return image
 
-    def transform_image(self, image):
+    def transform_image(self, image, warp=True):
         assert image.shape == (256, 256, 3)
-
+        
         # np.random.seed()
         transformed_img = random_transform(image, **self.random_transform_args)
-        warped_img, target_img = random_warp_64(transformed_img, **self.random_warp_args)
+        if warp:
+            warped_img, target_img = random_warp_64(transformed_img, **self.random_warp_args)
         return warped_img, target_img
+
+    def resize_image(self, image):
+        assert image.shape == (256, 256, 3)
+        image = cv2.resize(image, (64, 64)).astype('float32')
+        return image
