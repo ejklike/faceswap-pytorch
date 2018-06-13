@@ -9,6 +9,7 @@ from models import *
 from lib.utils import mkdir, get_face_ids
 from lib.image_loader import FaceImages, ToTensor
 from lib.save_fig import imwrite
+from lib.logger import Logger
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch FACESWAP Example')
@@ -86,13 +87,11 @@ encoder_args = dict(
     path=os.path.join(output_dir, 'encoder.pth'),
     init_dim=args.init_dim,
     code_dim=args.code_dim)
-encoder = get_model('encoder', FaceEncoder, device=device, **encoder_args)
-###
+encoder = get_model('encoder', S1ENC, **encoder_args).to(device)
 if args.fix_enc:
     print('encoder will not be trained!')
     for param in encoder.parameters():
         param.requires_grad = False
-###
 print('')
 
 # FACE IDs for training
@@ -104,49 +103,83 @@ print('')
 print('make dataloaders...', end='')
 dataset = dict()
 dataloader_args = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
+random_augment_args = {
+    'rotation_range': 10,
+    'zoom_range': 0.05,
+    'shift_range': 0.05,
+    'random_flip': 0.4,
+}
+random_warp_args = {
+    'coverage': 256, # 600, #160 #180 #200 #256
+    'warp_scale': 5,
+}
 for face_id in face_ids:
     dataset[face_id] = FaceImages(
         data_dir=os.path.join(args.data_dir, face_id), 
-        transform=transforms.Compose([ToTensor()]))
+        transform=transforms.Compose([ToTensor()]),
+        random_augment_args=random_augment_args,
+        random_warp_args=random_warp_args)
 print('done!')
 
 # path dicts to load/save model/optimizer while training
-decoder_path = dict()
-optimizer_path = dict()
+dec_path = dict()
+disc_path = dict()
+optG_path = dict()
+optD_path = dict()
 for face_id in face_ids:
-    decoder_path[face_id] = os.path.join(
+    dec_path[face_id] = os.path.join(
         output_dir, 'decoder{}.pth'.format(face_id))
-    optimizer_path[face_id] = os.path.join(
-        output_dir, 'optimizer{}.pth'.format(face_id))
+    disc_path[face_id] = os.path.join(
+        output_dir, 'discriminator{}.pth'.format(face_id))
+    optG_path[face_id] = os.path.join(
+        output_dir, 'optG{}.pth'.format(face_id))
+    optD_path[face_id] = os.path.join(
+        output_dir, 'optD{}.pth'.format(face_id))
 
-# LOSSES
-criterion = BasicLoss().to(device)
+logger = dict()
+for face_id in face_ids:
+    logger[face_id] = Logger(mkdir(os.path.join(output_dir, 'log', face_id)))
 
-def train(epoch, face_id, decoder, optimizer, draw_img=False, loop=10):
+def train(epoch, face_id, decoder, discriminator, optG, optD, draw_img=False, loop=10):
     encoder.train()
     decoder.train()
+    discriminator.train()
     for loop_idx in range(1, loop + 1):
-        dataset[face_id].distort_and_shuffle_images()
+        dataset[face_id].load_data(augment=True, warp=True, shuffle=True, to=64)
         dataloader = torch.utils.data.DataLoader(
             dataset[face_id], batch_size=args.batch_size, shuffle=True, **dataloader_args)
+        lossG_sum = lossD_sum = 0.
         for batch_idx, (warped, target) in enumerate(dataloader):
-            # forward
             warped, target = warped.to(device), target.to(device)
             output = decoder(encoder(warped))
 
-            # loss
-            loss = criterion(output, target)
+            # DISCRIMINATOR
+            optD.zero_grad()
+            output_pos = discriminator(t.cat([target, warped], 1))
+            output_neg = discriminator(t.cat([output.detach(), warped], 1))
+            lossD = define_lossD(output_pos, output_neg, device=device)
+            lossD.backward()
+            optD.step()
 
-            # backward
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            # GENERATOR
+            optG.zero_grad()
+            output_neg = discriminator(t.cat([output, warped], 1))
+            lossG = define_lossG(output, target, output_neg, device=device)
+            lossG.backward()
+            optG.step()
 
             if batch_idx % args.log_interval == 0:
-                print('\rTrain Epoch: {} (face_id: {}, loop: {}/{}) [{}/{} ({:.0f}%)], Loss: {:.6f}'
-                      .format(epoch, face_id, loop_idx, loop, batch_idx * len(warped), 
-                              len(dataloader.dataset), 100. * batch_idx / len(dataloader), 
-                              loss.item()), end='')
+                print('\rEpoch: {}(face {}; loop {}/{}) LossG/D: {:.6f}/{:.6f} [{}/{} ({:.0f}%)]'
+                      .format(epoch, face_id, loop_idx, loop, 
+                              lossG.item(), lossD.item(), batch_idx * len(warped), 
+                               len(dataloader.dataset), 100. * batch_idx / len(dataloader)), end='')
+            lossG_sum += lossG.item() * len(warped)
+            lossD_sum += lossD.item() * len(warped)
+        net_epoch = loop * (epoch - 1) + loop_idx
+        logger[face_id].scalar_summary(
+            'lossG', lossG_sum / len(dataloader.dataset), net_epoch)
+        logger[face_id].scalar_summary(
+            'lossD', lossD_sum / len(dataloader.dataset), net_epoch)
 
     if draw_img:
         this_output_dir = mkdir(os.path.join(output_dir, face_id))
@@ -154,58 +187,43 @@ def train(epoch, face_id, decoder, optimizer, draw_img=False, loop=10):
         img_list = [warped, output, target]
         imwrite(img_list, fname, size=8)
 
-
-def test(epoch, face_id, decoder, draw_img=False):
-    encoder.eval()
-    decoder.eval()
-    dataset[face_id].distort_and_shuffle_images()
-    dataloader = torch.utils.data.DataLoader(
-            dataset[face_id],
-            batch_size=args.batch_size, shuffle=True, **dataloader_args)
-    for batch_idx, (warped, target) in enumerate(dataloader):
-        if batch_idx > 0:
-            break
-
-        warped, target = warped.to(device), target.to(device)
-        output = decoder(encoder(warped))
-
-        if draw_img:
-            this_output_dir = mkdir(os.path.join(output_dir, face_id))
-            fname = '{}/epoch_{}_test.png'.format(this_output_dir, epoch)
-            img_list = [warped, output, target]
-            imwrite(img_list, fname, size=8)
+    dataset[face_id].clear_data()
 
 
 print('\nstart training...\n')
+# summary_writer = FileWriter(output_dir)
 for epoch in range(1, args.epochs + 1):
-    inner_loop = args.inner_loop
     is_save = epoch % args.log_interval == 0
     shuffle(face_ids)
     for face_id in face_ids:
-        decoder_args = dict(path=decoder_path[face_id])
-        decoder = get_model('decoder_' + face_id, FaceDecoder, device=device, **decoder_args)
+        # load decoder
+        decoder_args = dict(path=dec_path[face_id])
+        decoder = get_model(
+            'decoder_' + face_id, S1DEC, **decoder_args).to(device)
 
-        ###
-        if args.fix_enc:
-            parameters = decoder.parameters()
-        else:
-            parameters = list(encoder.parameters()) + list(decoder.parameters())
-        #
-        ###
-        optimizer = get_optimizer(args.lr, optimizer_path[face_id], parameters)
+        # load discriminator
+        discriminator_args = dict(path=disc_path[face_id])
+        discriminator = get_model(
+            'discriminator_' + face_id, S1DISC, **discriminator_args).to(device)
 
-        train(epoch, face_id, decoder, optimizer,
-            draw_img=is_save, loop=inner_loop)
-        test(epoch * inner_loop, face_id, decoder, draw_img=is_save)
-
-        print('')
-        ###
+        # define optimizer
+        paramG = list(decoder.parameters())
         if not args.fix_enc:
-            encoder.save(epoch * inner_loop)
-        ###
-        decoder.save(epoch * inner_loop)
-        save_optimizer(optimizer_path[face_id], optimizer)
+            paramG += list(encoder.parameters())
+        optG = get_optimizer(args.lr, optG_path[face_id], paramG)
+        optD = get_optimizer(args.lr, optD_path[face_id], discriminator.parameters())
+
+        # train
+        train(epoch, face_id, decoder, discriminator, optG, optD, 
+              draw_img=is_save, loop=args.inner_loop)
+
         print('')
-        
-        del decoder, parameters, optimizer
-    
+        if not args.fix_enc:
+            encoder.save(epoch * args.inner_loop)
+        decoder.save(epoch * args.inner_loop)
+        discriminator.save(epoch * args.inner_loop)
+        save_optimizer(optG_path[face_id], optG)
+        save_optimizer(optD_path[face_id], optD)
+        print('')
+
+        del decoder, discriminator, paramG, optG, optD

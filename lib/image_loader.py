@@ -1,11 +1,12 @@
 import os
 from scandir import scandir
+from random import shuffle
 import numpy as np
 
 from torch import from_numpy
 from torch.utils.data.dataset import Dataset
 
-from lib.image_augmetor import ImageAugmentor
+from lib.image_augmetor import ImageProcessor
 from lib.utils import get_image_paths
 
 
@@ -27,35 +28,18 @@ class ToTensor(object):
 
 
 class FaceImages(Dataset):
-    random_transform_args = {
-        'rotation_range': 10,
-        'zoom_range': 0.05,
-        'shift_range': 0.05,
-        'random_flip': 0.4,
-    }
-    random_warp_args = {
-        'coverage': 180, # 600, #160 #180 #200 #256
-        'warp_scale': 5,
-    }
+    def __init__(self, data_dir, transform=None,
+                 random_augment_args=None, random_warp_args=None):
+        # assert random_augment_args is not None
+        # assert random_warp_args is not None
 
-    def __init__(self, data_dir, transform=None):
-        image_paths = get_image_paths(data_dir)
-        self.image_augmentor = ImageAugmentor(
-            random_transform_args=self.random_transform_args, 
-            random_warp_args=self.random_warp_args)
-        self.original_images = [
-            self.image_augmentor.read_image(path) for path in image_paths]
+        self.image_paths = get_image_paths(data_dir)
+        self.image_processor = ImageProcessor(
+            random_augment_args=random_augment_args,
+            random_warp_args=random_warp_args)
         self.transform = transform
 
-        # ### tmp for faceswap.py (resize function)
-        # self.distorted_imgs, self.target_imgs = [], []
-        # for image in self.original_images:
-        #     image = self.image_augmentor.resize_image(image)
-        #     if self.transform is not None:
-        #         distorted_img, target_img = self.transform([image, image])
-        #     self.distorted_imgs.append(distorted_img)
-        #     self.target_imgs.append(target_img)
-        # ###
+        self.distorted_imgs, self.target_imgs = None, None
 
     def __getitem__(self, index):
         distorted_img = self.distorted_imgs[index]
@@ -63,22 +47,32 @@ class FaceImages(Dataset):
         return distorted_img, target_img
 
     def __len__(self):
-        return len(self.original_images)
+        return len(self.image_paths)
 
-    def shuffle(self):
-        perm_indices = np.random.permutation(len(self))
-        self.distorted_imgs = [self.distorted_imgs[i] for i in perm_indices]
-        self.target_imgs = [self.target_imgs[i] for i in perm_indices]
+    def _shuffle(self):
+        shuffle(self.image_paths)
 
-    def distort_images(self):
+    def load_data(self, augment=True, warp=True, shuffle=True, to=64):
+        if shuffle:
+            self._shuffle()
+
         self.distorted_imgs, self.target_imgs = [], []
-        for image in self.original_images:
-            distorted_img, target_img = self.image_augmentor.transform_image(image)
+        for path in self.image_paths:
+            image = self.image_processor.read_image(path)
+            if augment:
+                image = self.image_processor.affine_transform(image)
+
+            distorted_img, target_img = None, None
+            if warp:
+                distorted_img, target_img = self.image_processor.warp(image, to=to)
+            else:
+                distorted_img = target_img = self.image_processor.resize(image, to=to)
+
             if self.transform is not None:
                 distorted_img, target_img = self.transform([distorted_img, target_img])
             self.distorted_imgs.append(distorted_img)
             self.target_imgs.append(target_img)
 
-    def distort_and_shuffle_images(self):
-        self.distort_images()
-        self.shuffle()
+    def clear_data(self):
+        # del self.distorted_imgs, self.target_imgs
+        self.distorted_imgs, self.target_imgs = None, None

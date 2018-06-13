@@ -18,9 +18,9 @@ from torch import load, save
 
 
 
-def get_model(model_name, model_class, device='cuda', **kwargs):
+def get_model(model_name, model_class, **kwargs):
     print('build {}...'.format(model_name))
-    model = model_class(**kwargs).to(device)
+    model = model_class(**kwargs)
     model.load()
     return model
 
@@ -37,31 +37,45 @@ def save_optimizer(optimizer_path, optimizer):
     t.save(optimizer.state_dict(), optimizer_path)
 
 
-class BasicLoss(nn.Module):
-    def forward(self, output, target):
+def _first_order(x, axis=1):
+    _, _, w, h = x.shape
+    if axis == 2:
+        left = x[:, :, 0:w-1, :]
+        right = x[:, :, 1:w, :]
+        return t.abs(left - right)
+    elif axis == 3:
+        upper = x[:, :, :, 0:h-1]
+        lower = x[:, :, :, 1:h]
+        return t.abs(upper - lower)
+    else:
+        return None
+
+
+def define_lossG(fake_img, real_img, output_neg, device=None):
         # MAE loss
-        l1_loss = nn.L1Loss()(output, target)
-        # return l1_loss
-        
+        l1_loss = nn.L1Loss()(fake_img, real_img)
+
         # Edge loss (similar with total variation loss)
         edge_loss_w = t.mean(t.abs(
-            self.first_order(output, axis=2) - self.first_order(target, axis=2)))
+            _first_order(fake_img, axis=2) - _first_order(real_img, axis=2)))
         edge_loss_h = t.mean(t.abs(
-            self.first_order(output, axis=3) - self.first_order(target, axis=3)))
-        return l1_loss + edge_loss_w + edge_loss_h
+            _first_order(fake_img, axis=3) - _first_order(real_img, axis=3)))
 
-    def first_order(self, x, axis=1):
-        _, _, w, h = x.shape
-        if axis == 2:
-            left = x[:, :, 0:w-1, :]
-            right = x[:, :, 1:w, :]
-            return t.abs(left - right)
-        elif axis == 3:
-            upper = x[:, :, :, 0:h-1]
-            lower = x[:, :, :, 1:h]
-            return t.abs(upper - lower)
-        else:
-            return None
+        # LS-GAN loss
+        loss_G_fake = nn.MSELoss()(output_neg, t.ones(output_neg.shape).to(device))
+
+        lossG = l1_loss + 0.5 * loss_G_fake + 0.01 * (edge_loss_w + edge_loss_h)
+        return lossG
+
+
+def define_lossD(output_pos, output_neg, device=None):
+        # LS-GAN loss
+        # MSE for real
+        loss_D_real = nn.MSELoss()(output_pos, t.ones(output_pos.shape).to(device))
+        # MSE for fake
+        loss_D_fake = nn.MSELoss()(output_neg, t.zeros(output_neg.shape).to(device))
+
+        return loss_D_real + loss_D_fake
 
 
 class BasicModule(nn.Module):
@@ -120,10 +134,10 @@ class BasicResBlock(nn.Module):
         return out
 
 
-class FaceEncoder(BasicModule):
+class S1ENC(BasicModule):
     def __init__(self, init_dim=64, code_dim=1024, path=None):
         assert path is not None
-        super(FaceEncoder, self).__init__(path)
+        super(S1ENC, self).__init__(path)
 
         self.conv1 = self.conv(3, init_dim)
         self.conv2 = self.conv(init_dim, init_dim * 2)
@@ -158,10 +172,10 @@ class FaceEncoder(BasicModule):
         return x
 
 
-class FaceDecoder(BasicModule):
+class S1DEC(BasicModule):
     def __init__(self, path=None):
         assert path is not None
-        super(FaceDecoder, self).__init__(path)
+        super(S1DEC, self).__init__(path)
 
         self.upscale1 = upscale(512, 256)
         self.upscale2 = upscale(256, 128)
@@ -183,3 +197,31 @@ class FaceDecoder(BasicModule):
         x = self.conv(x)     # (3, 64, 64)
         x = F.sigmoid(x)
         return x
+
+class S1DISC(BasicModule):
+    def __init__(self, path=None):
+        assert path is not None
+        super(S1DISC, self).__init__(path)
+        init_dim = 64
+        self.encode_img = nn.Sequential(
+            nn.Conv2d(6, init_dim, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (init_dim) x 32 x 32
+            nn.Conv2d(init_dim, init_dim * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(init_dim * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size (init_dim*2) x 16 x 16
+            nn.Conv2d(init_dim*2, init_dim * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(init_dim * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size (init_dim*4) x 8 x 8
+            nn.Conv2d(init_dim*4, init_dim * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(init_dim * 8),
+            # state size (init_dim * 8) x 4 x 4)
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+
+    def forward(self, image):
+        img_embedding = self.encode_img(image)
+
+        return img_embedding

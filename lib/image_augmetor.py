@@ -30,7 +30,7 @@ def get_random_affine_transformation(width, height,
 
     return mat
 
-def random_transform(image, rotation_range,
+def random_augment(image, rotation_range,
                      zoom_range, shift_range, random_flip):
     """
     rotate, scale, and translate an image in random
@@ -49,7 +49,7 @@ def random_transform(image, rotation_range,
         result = result[:, ::-1]
     return result
 
-def random_warp_64(image, coverage, warp_scale):
+def random_warp(image, coverage, warp_scale, to=64):
     """
     get pair of random warped images from aligned face image
 
@@ -60,7 +60,8 @@ def random_warp_64(image, coverage, warp_scale):
     output
 
     """
-    size = image.shape[0] # squared image!
+    size = 256
+    x = to // 64
     center = size //2
 
     # 5 x 5 grid points in the coverage area
@@ -78,18 +79,19 @@ def random_warp_64(image, coverage, warp_scale):
     # densify grid points (5x5 -> 64x64)
     # (side values are removed since their values are 
     #  almost same and thus make duplicate neighboring pixels)
-    interp_mapx = cv2.resize(mapx, (80, 80))[8:72, 8:72].astype('float32')
-    interp_mapy = cv2.resize(mapy, (80, 80))[8:72, 8:72].astype('float32')
+    interp_mapx = cv2.resize(mapx, (80*x, 80*x))[8*x:72*x, 8*x:72*x].astype('float32')
+    interp_mapy = cv2.resize(mapy, (80*x, 80*x))[8*x:72*x, 8*x:72*x].astype('float32')
 
     warped_image = cv2.remap(image, interp_mapx, interp_mapy, cv2.INTER_LINEAR)
 
     src_points = np.stack([mapx.ravel(), mapy.ravel() ], axis=-1)
-    dst_points = np.mgrid[0:65:16, 0:65:16].T.reshape(-1,2)
+    dst_points = np.mgrid[0:65*x:16*x, 0:65*x:16*x].T.reshape(-1,2)
     mat = umeyama(src_points, dst_points, True)[0:2]
 
-    target_image = cv2.warpAffine(image, mat, (64, 64))
+    target_image = cv2.warpAffine(image, mat, (64*x, 64*x))
 
     return warped_image, target_image
+
 
 def normalize(img):
     """
@@ -97,13 +99,14 @@ def normalize(img):
     """
     return img / 255.0
 
-class ImageAugmentor(object):
+
+class ImageProcessor(object):
     """
     input_image_size = (256, 256)
     output_image_size = (64, 64)
     """
-    def __init__(self, random_transform_args, random_warp_args):
-        self.random_transform_args = random_transform_args
+    def __init__(self, random_augment_args, random_warp_args):
+        self.random_augment_args = random_augment_args
         self.random_warp_args = random_warp_args
 
     def read_image(self, image_path):
@@ -113,16 +116,17 @@ class ImageAugmentor(object):
             raise Exception("Error while reading image", image_path)
         return image
 
-    def transform_image(self, image, warp=True):
+    def affine_transform(self, image):
         assert image.shape == (256, 256, 3)
-        
-        # np.random.seed()
-        transformed_img = random_transform(image, **self.random_transform_args)
-        if warp:
-            warped_img, target_img = random_warp_64(transformed_img, **self.random_warp_args)
+        return random_augment(image, **self.random_augment_args)
+
+    def warp(self, image, to=64):
+        assert image.shape == (256, 256, 3)
+        assert to in [64, 128]
+        warped_img, target_img = random_warp(image, **self.random_warp_args, to=64)
         return warped_img, target_img
 
-    def resize_image(self, image):
+    def resize(self, image, to=64):
         assert image.shape == (256, 256, 3)
-        image = cv2.resize(image, (64, 64)).astype('float32')
+        image = cv2.resize(image, (to, to), interpolation=cv2.INTER_LINEAR).astype('float32')
         return image
