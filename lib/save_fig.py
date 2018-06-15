@@ -2,11 +2,14 @@ import cv2
 import numpy as np
 
 
-def imwrite(img_list, fname, size=8):    
+def imwrite(img_list, fname, size=64, n=8):
     def _torch_to_img(tensor):
         return tensor.data.cpu().numpy().transpose((0,2,3,1))
 
-    img_list = [_torch_to_img(img_batch)[:size] for img_batch in img_list]
+    # (batch_size, 3, w, h) ==> (n, w, h, 3)
+    img_list = [_torch_to_img(img_batch)[:n] for img_batch in img_list]
+    # TODO: resize to given size
+    # img_list = [ for img in img_list]
     figure = np.stack(img_list, axis=0)
     # print(figure.shape)
     

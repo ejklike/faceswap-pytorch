@@ -49,19 +49,8 @@ def random_augment(image, rotation_range,
         result = result[:, ::-1]
     return result
 
-def random_warp(image, coverage, warp_scale, to=64):
-    """
-    get pair of random warped images from aligned face image
-
-    input
-        coverage: length (pixel) of image to crop
-        warp_scale: warping range of grid points
-
-    output
-
-    """
+def _get_warp_xy(coverage, warp_scale):
     size = 256
-    x = to // 64
     center = size //2
 
     # 5 x 5 grid points in the coverage area
@@ -75,6 +64,22 @@ def random_warp(image, coverage, warp_scale, to=64):
     # warp points randomly
     mapx = mapx + np.random.normal(size=grid_size, scale=warp_scale)
     mapy = mapy + np.random.normal(size=grid_size, scale=warp_scale)
+
+    return mapx, mapy
+
+
+def random_warp(image, mapx, mapy, to=64):
+    """
+    get pair of random warped images from aligned face image
+
+    input
+        coverage: length (pixel) of image to crop
+        warp_scale: warping range of grid points
+
+    output
+
+    """
+    x = to // 64
 
     # densify grid points (5x5 -> 64x64)
     # (side values are removed since their values are 
@@ -122,8 +127,9 @@ class ImageProcessor(object):
 
     def warp(self, image, to=64):
         assert image.shape == (256, 256, 3)
-        assert to in [64, 128]
-        warped_img, target_img = random_warp(image, **self.random_warp_args, to=64)
+        assert to in [64, 128, 256]
+        mapx, mapy = _get_warp_xy(**self.random_warp_args)
+        warped_img, target_img = random_warp(image, mapx, mapy, to=to)
         return warped_img, target_img
 
     def resize(self, image, to=64):
