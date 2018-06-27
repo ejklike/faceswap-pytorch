@@ -13,11 +13,11 @@ matplotlib==2.2.2
 ## usage statement
 
 ```
-usage: train.py [-h] [-d DATA_DIR] [-n MODEL_NAME] [-b BATCH_SIZE]
-                [--init-dim INIT_DIM] [--code-dim CODE_DIM]
-                [--log-interval LOG_INTERVAL] [--epochs EPOCHS]
-                [--inner-loop INNER_LOOP] [--lr LR] [--no-cuda] [--seed SEED]
-                [--fix-enc]
+usage: train.py [-h] [-d DATA_DIR]
+                [-m {GAN128,AE128_CYCLE_DISC,AE64,GAN64,AE128,AE64_MASKED_CYCLE_DISC,AE128_STEP,GAN64_CYCLE,AE64_MASKED_CYCLE,AE64_MASKED,AE64_CYCLE_DISC}]
+                [-o OUTPUT_DIR] [-b BATCH_SIZE] [--epochs EPOCHS]
+                [--sub-epoch SUB_EPOCH] [--lr LR] [--no-cuda] [--seed SEED]
+                [--fix-enc] [--mask-loss]
 
 PyTorch FACESWAP Example
 
@@ -25,25 +25,20 @@ optional arguments:
   -h, --help            show this help message and exit
   -d DATA_DIR, --data-dir DATA_DIR
                         input data directory
-  -n MODEL_NAME, --model-name MODEL_NAME
-                        model name (which will become output dir name)
+  -m {GAN128,AE128_CYCLE_DISC,AE64,GAN64,AE128,AE64_MASKED_CYCLE_DISC,AE128_STEP,GAN64_CYCLE,AE64_MASKED_CYCLE,AE64_MASKED,AE64_CYCLE_DISC}, --model-name {GAN128,AE128_CYCLE_DISC,AE64,GAN64,AE128,AE64_MASKED_CYCLE_DISC,AE128_STEP,GAN64_CYCLE,AE64_MASKED_CYCLE,AE64_MASKED,AE64_CYCLE_DISC}
+                        select a model to train
+  -o OUTPUT_DIR, --output-dir OUTPUT_DIR
+                        output dir name (which will become output dir name)
   -b BATCH_SIZE, --batch-size BATCH_SIZE
                         input batch size for training (default: 64)
-  --init-dim INIT_DIM   the number of initial channel (default: 32)
-  --code-dim CODE_DIM   the number of channel in encoded tensor (default:
-                        1024)
-  --log-interval LOG_INTERVAL
-                        how many batches to wait before logging training
-                        status
-  --epochs EPOCHS       number of epochs to train (default: 100000000)
-  --inner-loop INNER_LOOP
+  --epochs EPOCHS       number of epochs to train (default: 100)
+  --sub-epoch SUB_EPOCH
                         number of loop in an epoch for each face (default:
                         100)
   --lr LR               learning rate (default: 5e-5)
   --no-cuda             disables CUDA training
   --seed SEED           random seed (default: 1)
-  --fix-enc             fix encoder and train decoder only
-
+  --fix-enc             fix encoder a
 ```
 
 ## How to
@@ -58,15 +53,15 @@ optional arguments:
 ### 2. 모델을 학습한다.
 
 ```
-$ CUDA_VISIBLE_DEVICES=0 python train.py -d ./data --init-dim 256 --code-dim 1024 -n model_256_1024
+$ python train.py -d ./data -m AE64 -o AE64_SEGMENT
 ```
 
-- 학습된 모델은 `-n` 인자에 해당하는 폴더에 저장된다. 위의 경우, `./output/model_256_1024`에 저장된다.
-- 학습 중에 일정한 간격으로 모델 입력/출력/타겟 이미지를 저장한다. 위의 경우, `./output/model_256_1024/face_id`에 저장된다
+- 학습된 모델은 `-n` 인자에 해당하는 폴더에 저장된다. 위의 경우, `./output/AE64_SEGMENT`에 저장된다.
+- 학습 중에 일정한 간격으로 모델 입력/출력/타겟 이미지를 저장한다. 위의 경우, `./output/AE64_SEGMENT/face_id`에 저장된다
 - `log_interval`마다 인당 epoch `inner_loop`씩 공용 encoder와 사람별 decoder를 학습한다.
     - `log_interval` 내에서 학습을 마치면 모델을 저장하고, 모델 입력/출력/타겟 이미지를 저장한다.
 
-- 모델 구조 (`init_dim=128, code_dim=1024`의 경우)
+- AE64 모델 구조 (`init_dim=128, code_dim=1024`의 경우)
 ```
 - encoder
 input:  (  3,  64,  64)
