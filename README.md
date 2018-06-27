@@ -14,7 +14,7 @@ matplotlib==2.2.2
 
 ```
 usage: train.py [-h] [-d DATA_DIR]
-                [-m {GAN128,AE128_CYCLE_DISC,AE64,GAN64,AE128,AE64_MASKED_CYCLE_DISC,AE128_STEP,GAN64_CYCLE,AE64_MASKED_CYCLE,AE64_MASKED,AE64_CYCLE_DISC}]
+                [-m {AE64,AE128}]
                 [-o OUTPUT_DIR] [-b BATCH_SIZE] [--epochs EPOCHS]
                 [--sub-epoch SUB_EPOCH] [--lr LR] [--no-cuda] [--seed SEED]
                 [--fix-enc] [--mask-loss]
@@ -25,7 +25,7 @@ optional arguments:
   -h, --help            show this help message and exit
   -d DATA_DIR, --data-dir DATA_DIR
                         input data directory
-  -m {GAN128,AE128_CYCLE_DISC,AE64,GAN64,AE128,AE64_MASKED_CYCLE_DISC,AE128_STEP,GAN64_CYCLE,AE64_MASKED_CYCLE,AE64_MASKED,AE64_CYCLE_DISC}, --model-name {GAN128,AE128_CYCLE_DISC,AE64,GAN64,AE128,AE64_MASKED_CYCLE_DISC,AE128_STEP,GAN64_CYCLE,AE64_MASKED_CYCLE,AE64_MASKED,AE64_CYCLE_DISC}
+  -m {AE64,AE128}
                         select a model to train
   -o OUTPUT_DIR, --output-dir OUTPUT_DIR
                         output dir name (which will become output dir name)
