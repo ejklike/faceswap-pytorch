@@ -57,6 +57,10 @@ parser.add_argument('--fix-enc',
                     action='store_true', 
                     default=False,
                     help='fix encoder and train decoder only')
+parser.add_argument('--mask-loss',
+                    action='store_true', 
+                    default=False,
+                    help='mask loss for segmented image')
 
 args = parser.parse_args()
 
@@ -98,7 +102,8 @@ trainer = Trainer(
     seed=args.seed,
     lrG=args.lr,
     lrD=args.lr,
-    batch_size=args.batch_size)
+    batch_size=args.batch_size,
+    mask_loss=args.mask_loss)
 
 # logger to record loss
 logger = dict()
@@ -106,7 +111,6 @@ for face_id in face_ids:
     logger[face_id] = Logger(mkdir(os.path.join(output_dir, 'log', face_id)))
 
 print('\nstart training...\n')
-# summary_writer = FileWriter(output_dir)
 for epoch in range(1, args.epochs + 1):
     shuffle(face_ids)
     for face_id in face_ids:
