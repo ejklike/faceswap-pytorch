@@ -89,24 +89,17 @@ if __name__ == '__main__':
     use_cuda = args.no_cuda is False and torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    # MODEL/OUTPUT DIR
-    input_dir = args.input_dir
-    output_dir = mkdir(os.path.join('./output', args.model_name, 'convert'))
-    model_dir = mkdir(os.path.join('./output', args.model_name))
+    # DATALOADER
+    dataset = MultiResFaceImages(
+        data_dir=os.path.join(args.input_dir), 
+        transform=transforms.Compose([ToTensor()]))
 
-    # ENCODER
-    encoder_args = dict(
-        path=os.path.join(model_dir, 'encoder.pth'),
-        init_dim=args.init_dim,
-        code_dim=args.code_dim)
-    encoder = get_model('encoder', FaceEncoder, device=device, **encoder_args).eval()
-    print('')
 
-    # DECODER
-    decoder_args = dict(
-        path=os.path.join(model_dir, 'decoder{}.pth'.format(args.target)))
-    decoder = get_model('decoder_' + args.target, FaceDecoder, device=device, **decoder_args).eval()
-    print('')
+    Trainer = PluginLoader.get_trainer(args.model_name)
+    trainer = Trainer(
+        output_dir=args.output_dir, 
+        no_cuda=args.no_cuda,
+        batch_size=1)
 
     processor = ConvertProcessor(args.input_dir, output_dir)
     converter_args = dict(
