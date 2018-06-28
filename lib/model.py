@@ -136,7 +136,7 @@ class Decoder64(BasicModule):
 class Decoder64RGBA(BasicModule):
     def __init__(self, path=None):
         assert path is not None
-        super(Decoder64, self).__init__(path)
+        super(Decoder64RGBA, self).__init__(path)
 
         self.decode_img = nn.Sequential(
             up_block3x3(512, 256),
@@ -154,7 +154,10 @@ class Decoder64RGBA(BasicModule):
 
     def forward(self, x):    # (512, 8, 8)
         tmp = self.decode_img(x)
-        return self.rgb(tmp)
+        rgb = self.rgb(tmp)
+        alpha = self.alpha(tmp)
+        alpha = t.cat([alpha, alpha, alpha], 1)
+        return rgb, alpha
 
 
 class Discriminator64(BasicModule):
